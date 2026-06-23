@@ -33,7 +33,7 @@ function CustomTooltip({ active, payload, label, unit }) {
     }}>
       <p style={{ margin: '0 0 4px', fontSize: '12px', color: 'var(--muted)' }}>{label}</p>
       <p style={{ margin: 0, fontFamily: 'var(--font-data)', fontSize: '18px', fontWeight: 700, color: payload[0].color }}>
-        {payload[0].value}{unit}
+        {payload[0].payload[payload[0].dataKey]}{unit}
       </p>
     </div>
   )
@@ -195,7 +195,7 @@ export default function PlayerProfile() {
             { label: 'Games', val: totals.games },
             { label: 'Total PTS', val: totals.points },
             { label: 'Total AST', val: totals.assists },
-            { label: 'Net Rating', val: totals.avgNetRating, highlight: true },
+            { label: 'Avg Net Rating per Game', val: totals.avgNetRating, highlight: true },
           ].map(({ label, val, highlight }) => (
             <div key={label} style={{
               background: highlight ? 'rgba(225, 29, 72, 0.06)' : 'var(--surface)',

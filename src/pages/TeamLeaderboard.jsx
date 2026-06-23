@@ -8,13 +8,13 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
 const COLS = [
-  { key: 'points',          label: 'PTS',  desc: 'Total points' },
-  { key: 'assists',         label: 'AST',  desc: 'Total assists' },
-  { key: 'rebounds',        label: 'REB',  desc: 'Total rebounds' },
-  { key: 'steals',          label: 'STL',  desc: 'Total steals' },
-  { key: 'blocks',          label: 'BLK',  desc: 'Total blocks' },
-  { key: 'net_rating',      label: 'NET',  desc: 'Net rating (cumulative)' },
-  { key: 'games',           label: 'GP',   desc: 'Games played' },
+  { key: 'points',          label: 'PTS',     desc: 'Total points' },
+  { key: 'assists',         label: 'AST',     desc: 'Total assists' },
+  { key: 'rebounds',        label: 'REB',     desc: 'Total rebounds' },
+  { key: 'steals',          label: 'STL',     desc: 'Total steals' },
+  { key: 'blocks',          label: 'BLK',     desc: 'Total blocks' },
+  { key: 'avg_net_rating',  label: 'Net Rtg', desc: 'Net rating per game (average)' },
+  { key: 'games',           label: 'GP',      desc: 'Games played' },
 ]
 
 function calcNetRating(records) {
@@ -44,7 +44,7 @@ export default function TeamLeaderboard() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sortKey, setSortKey] = useState('net_rating')
+  const [sortKey, setSortKey] = useState('avg_net_rating')
   const [sortDir, setSortDir] = useState('desc')
 
   useEffect(() => {
@@ -65,19 +65,23 @@ export default function TeamLeaderboard() {
         byPlayer[pid].records.push(s)
       }
 
-      const compiled = Object.values(byPlayer).map(({ playerId, name, records }) => ({
-        playerId,
-        name,
-        games:      records.length,
-        points:     sumStat(records, 'points'),
-        assists:    sumStat(records, 'assists'),
-        rebounds:   sumStat(records, 'rebounds'),
-        steals:     sumStat(records, 'steals'),
-        blocks:     sumStat(records, 'blocks'),
-        net_rating: calcNetRating(records),
-      }))
+      const compiled = Object.values(byPlayer).map(({ playerId, name, records }) => {
+        const games = records.length
+        const netTotal = calcNetRating(records)
+        return {
+          playerId,
+          name,
+          games,
+          points:          sumStat(records, 'points'),
+          assists:         sumStat(records, 'assists'),
+          rebounds:        sumStat(records, 'rebounds'),
+          steals:          sumStat(records, 'steals'),
+          blocks:          sumStat(records, 'blocks'),
+          avg_net_rating:  games > 0 ? +(netTotal / games).toFixed(1) : 0,
+        }
+      })
 
-      compiled.sort((a, b) => b.net_rating - a.net_rating)
+      compiled.sort((a, b) => b.avg_net_rating - a.avg_net_rating)
       setRows(compiled)
       setLoading(false)
     }
@@ -100,7 +104,7 @@ export default function TeamLeaderboard() {
   }, [rows, sortKey, sortDir])
 
   const netRankings = useMemo(() =>
-    [...rows].sort((a, b) => b.net_rating - a.net_rating),
+    [...rows].sort((a, b) => b.avg_net_rating - a.avg_net_rating),
     [rows]
   )
 
@@ -181,7 +185,7 @@ export default function TeamLeaderboard() {
                           className={`sort-btn ${sortKey === col.key ? 'active' : ''}`}
                           onClick={() => handleSort(col.key)}
                           title={col.desc}
-                          style={{ marginLeft: 'auto', color: col.key === 'net_rating' ? '#E11D48' : undefined }}
+                          style={{ marginLeft: 'auto', color: col.key === 'avg_net_rating' ? '#E11D48' : undefined }}
                         >
                           {col.label}
                           {sortKey === col.key && <SortArrow dir={sortDir} />}
@@ -225,10 +229,10 @@ export default function TeamLeaderboard() {
                           <span style={{
                             fontFamily: 'var(--font-data)',
                             fontSize: '14px',
-                            color: col.key === 'net_rating'
+                            color: col.key === 'avg_net_rating'
                               ? '#E11D48'
                               : sortKey === col.key ? 'var(--accent)' : 'var(--text)',
-                            fontWeight: (col.key === 'net_rating' || sortKey === col.key) ? 700 : 400,
+                            fontWeight: (col.key === 'avg_net_rating' || sortKey === col.key) ? 700 : 400,
                           }}>
                             {row[col.key]}
                           </span>
@@ -245,7 +249,7 @@ export default function TeamLeaderboard() {
               fontSize: '12px', color: 'var(--muted)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-              <span>{rows.length} player{rows.length !== 1 ? 's' : ''} · cumulative totals</span>
+              <span>{rows.length} player{rows.length !== 1 ? 's' : ''} · avg per game</span>
               <span>Click a row to see full profile</span>
             </div>
           </div>
@@ -259,7 +263,7 @@ export default function TeamLeaderboard() {
                 color: 'var(--text)', margin: '0 0 4px',
               }}>Net Rating Rankings</h2>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)' }}>
-                (PTS × 1) + (AST × 1.5) + (REB × 1.2) + (STL × 2) + (BLK × 2) — cumulative totals
+                [(PTS × 1) + (AST × 1.5) + (REB × 1.2) + (STL × 2) + (BLK × 2)] ÷ games played
               </p>
             </div>
             <div className="card" style={{ padding: '24px 24px 16px' }}>
@@ -301,7 +305,7 @@ export default function TeamLeaderboard() {
                       )
                     }}
                   />
-                  <Bar dataKey="net_rating" radius={[0, 4, 4, 0]} label={{
+                  <Bar dataKey="avg_net_rating" radius={[0, 4, 4, 0]} label={{
                     position: 'right',
                     fontFamily: 'var(--font-data)',
                     fontSize: 12,
