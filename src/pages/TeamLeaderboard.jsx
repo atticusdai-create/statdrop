@@ -8,25 +8,24 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
 const COLS = [
-  { key: 'points',          label: 'PTS',  desc: 'Points per game' },
-  { key: 'assists',         label: 'AST',  desc: 'Assists per game' },
-  { key: 'rebounds',        label: 'REB',  desc: 'Rebounds per game' },
-  { key: 'steals',          label: 'STL',  desc: 'Steals per game' },
-  { key: 'blocks',          label: 'BLK',  desc: 'Blocks per game' },
-  { key: 'net_rating',      label: 'NET',  desc: 'Net rating per game' },
+  { key: 'points',          label: 'PTS',  desc: 'Total points' },
+  { key: 'assists',         label: 'AST',  desc: 'Total assists' },
+  { key: 'rebounds',        label: 'REB',  desc: 'Total rebounds' },
+  { key: 'steals',          label: 'STL',  desc: 'Total steals' },
+  { key: 'blocks',          label: 'BLK',  desc: 'Total blocks' },
+  { key: 'net_rating',      label: 'NET',  desc: 'Net rating (cumulative)' },
   { key: 'games',           label: 'GP',   desc: 'Games played' },
 ]
 
 function calcNetRating(records) {
   if (!records.length) return 0
-  const sum = records.reduce((s, r) =>
+  const total = records.reduce((s, r) =>
     s + (r.points * 1) + (r.assists * 1.5) + (r.rebounds * 1.2) + (r.steals * 2) + (r.blocks * 2), 0)
-  return +(sum / records.length).toFixed(1)
+  return +total.toFixed(1)
 }
 
-function avg(arr, key) {
-  if (!arr.length) return 0
-  return arr.reduce((s, r) => s + (r[key] || 0), 0) / arr.length
+function sumStat(records, key) {
+  return records.reduce((s, r) => s + (r[key] || 0), 0)
 }
 
 function SortArrow({ dir }) {
@@ -45,7 +44,7 @@ export default function TeamLeaderboard() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sortKey, setSortKey] = useState('points')
+  const [sortKey, setSortKey] = useState('net_rating')
   const [sortDir, setSortDir] = useState('desc')
 
   useEffect(() => {
@@ -69,19 +68,28 @@ export default function TeamLeaderboard() {
       const compiled = Object.values(byPlayer).map(({ playerId, name, records }) => ({
         playerId,
         name,
-        games:           records.length,
-        points:          +avg(records, 'points').toFixed(1),
-        assists:         +avg(records, 'assists').toFixed(1),
-        rebounds:        +avg(records, 'rebounds').toFixed(1),
-        steals:          +avg(records, 'steals').toFixed(1),
-        blocks:          +avg(records, 'blocks').toFixed(1),
-        net_rating:      calcNetRating(records),
+        games:      records.length,
+        points:     sumStat(records, 'points'),
+        assists:    sumStat(records, 'assists'),
+        rebounds:   sumStat(records, 'rebounds'),
+        steals:     sumStat(records, 'steals'),
+        blocks:     sumStat(records, 'blocks'),
+        net_rating: calcNetRating(records),
       }))
 
+      compiled.sort((a, b) => b.net_rating - a.net_rating)
       setRows(compiled)
       setLoading(false)
     }
+
     load()
+
+    const channel = supabase
+      .channel(`leaderboard-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_stats', filter: `team_id=eq.${id}` }, load)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [id])
 
   const sorted = useMemo(() => {
@@ -237,7 +245,7 @@ export default function TeamLeaderboard() {
               fontSize: '12px', color: 'var(--muted)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-              <span>{rows.length} player{rows.length !== 1 ? 's' : ''} · averages per game</span>
+              <span>{rows.length} player{rows.length !== 1 ? 's' : ''} · cumulative totals</span>
               <span>Click a row to see full profile</span>
             </div>
           </div>
@@ -251,7 +259,7 @@ export default function TeamLeaderboard() {
                 color: 'var(--text)', margin: '0 0 4px',
               }}>Net Rating Rankings</h2>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)' }}>
-                (PTS × 1) + (AST × 1.5) + (REB × 1.2) + (STL × 2) + (BLK × 2) — per game
+                (PTS × 1) + (AST × 1.5) + (REB × 1.2) + (STL × 2) + (BLK × 2) — cumulative totals
               </p>
             </div>
             <div className="card" style={{ padding: '24px 24px 16px' }}>
