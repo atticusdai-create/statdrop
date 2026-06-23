@@ -30,8 +30,13 @@ function fmt(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function CustomTooltip({ active, payload, label, unit }) {
+function CustomTooltip({ active, payload, label, unit, statKey }) {
+  console.log('[CustomTooltip] active:', active, 'payload:', payload, 'label:', label)
   if (!active || !payload?.length) return null
+  // payload[0].payload is always the raw data object; use statKey to read the real value
+  const value = statKey
+    ? (payload[0].payload?.[statKey] ?? payload[0].value)
+    : payload[0].value
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
@@ -39,14 +44,14 @@ function CustomTooltip({ active, payload, label, unit }) {
     }}>
       <p style={{ margin: '0 0 4px', fontSize: '12px', color: 'var(--muted)' }}>{fmt(label)}</p>
       <p style={{ margin: 0, fontFamily: 'var(--font-data)', fontSize: '18px', fontWeight: 700, color: payload[0].color }}>
-        {payload[0].value}{unit}
+        {value}{unit}
       </p>
     </div>
   )
 }
 
 function StatChart({ data, statKey, label, color }) {
-  console.log('[StatChart]', label, 'data:', data)
+  console.log('[StatChart]', label, 'keys:', data.length ? Object.keys(data[0]) : [], 'data:', data)
   const values = data.map(d => d[statKey])
   const max = Math.max(...values, 1)
   const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) : '—'
@@ -100,7 +105,7 @@ function StatChart({ data, statKey, label, color }) {
               tick={{ fill: 'var(--muted)', fontSize: 10, fontFamily: 'var(--font-body)' }}
               axisLine={false} tickLine={false}
             />
-            <Tooltip content={<CustomTooltip unit={unit} />} />
+            <Tooltip content={(props) => <CustomTooltip {...props} unit={unit} statKey={statKey} />} />
             <Line
               type="monotone"
               dataKey={statKey}
