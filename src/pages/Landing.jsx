@@ -6,12 +6,11 @@ import { supabase } from '../lib/supabase'
 const TICKER_ITEMS = [
   { player: 'J. Rivera', stat: '31 PTS' },
   { player: 'T. Okafor', stat: '12 AST' },
-  { player: 'M. Chen',   stat: '67% FG' },
   { player: 'A. Davis',  stat: '8 BLK' },
   { player: 'K. Nwosu',  stat: '6 STL' },
   { player: 'S. Patel',  stat: '24 PTS' },
   { player: 'D. Yılmaz', stat: '11 AST' },
-  { player: 'L. Torres', stat: '72% FG' },
+  { player: 'L. Torres', stat: '14 REB' },
 ]
 
 const doubled = [...TICKER_ITEMS, ...TICKER_ITEMS]
@@ -196,7 +195,7 @@ export default function Landing() {
             {
               n: '02',
               title: 'Log every game',
-              body: 'After each game, drop in points, assists, steals, blocks, and shot percentage.',
+              body: 'After each game, drop in points, assists, rebounds, steals, and blocks.',
             },
             {
               n: '03',

@@ -26,7 +26,6 @@ create table if not exists game_stats (
   assists         integer default 0,
   steals          integer default 0,
   blocks          integer default 0,
-  shot_percentage numeric(5,2) default 0,
   created_at      timestamptz default now()
 );
 

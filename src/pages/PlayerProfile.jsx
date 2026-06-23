@@ -12,12 +12,11 @@ const STAT_CHARTS = [
   { key: 'rebounds',        label: 'Rebounds',        color: '#06B6D4' },
   { key: 'steals',          label: 'Steals',          color: '#10B981' },
   { key: 'blocks',          label: 'Blocks',          color: '#8B5CF6' },
-  { key: 'shot_percentage', label: 'Shot %',          color: '#F59E0B' },
   { key: 'net_rating',      label: 'Net Rating',      color: '#E11D48' },
 ]
 
 function calcNetRating(s) {
-  return +((s.points * 1) + (s.assists * 1.5) + (s.rebounds * 1.2) + (s.steals * 2) + (s.blocks * 2) + (s.shot_percentage * 0.5)).toFixed(2)
+  return +((s.points * 1) + (s.assists * 1.5) + (s.rebounds * 1.2) + (s.steals * 2) + (s.blocks * 2)).toFixed(2)
 }
 
 function fmt(dateStr) {
@@ -45,7 +44,7 @@ function StatChart({ data, statKey, label, color }) {
   const max = Math.max(...values, 1)
   const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) : '—'
   const last = values.length ? values[values.length - 1] : '—'
-  const unit = statKey === 'shot_percentage' ? '%' : ''
+  const unit = ''
   const trend = values.length >= 2 ? (values[values.length - 1] - values[values.length - 2]) : 0
 
   return (
@@ -242,7 +241,7 @@ export default function PlayerProfile() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '480px' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                    {['Date', 'PTS', 'AST', 'REB', 'STL', 'BLK', 'FG%', 'NET'].map(h => (
+                    {['Date', 'PTS', 'AST', 'REB', 'STL', 'BLK', 'NET'].map(h => (
                       <th key={h} style={{
                         padding: '12px 16px', textAlign: h === 'Date' ? 'left' : 'right',
                         fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em',
@@ -257,9 +256,9 @@ export default function PlayerProfile() {
                       <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--muted)', fontFamily: 'var(--font-data)' }}>
                         {fmt(row.game_date)}
                       </td>
-                      {['points', 'assists', 'rebounds', 'steals', 'blocks', 'shot_percentage'].map(k => (
+                      {['points', 'assists', 'rebounds', 'steals', 'blocks'].map(k => (
                         <td key={k} style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-data)', fontSize: '14px', color: 'var(--text)' }}>
-                          {k === 'shot_percentage' ? `${row[k]}%` : row[k]}
+                          {row[k]}
                         </td>
                       ))}
                       <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-data)', fontSize: '14px', color: '#E11D48', fontWeight: 600 }}>

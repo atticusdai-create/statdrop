@@ -98,7 +98,6 @@ export default function LiveGame() {
           player_id: playerId,
           team_id: selectedTeam,
           game_date: today(),
-          shot_percentage: 0,
           ...totals,
         }])
         .select()

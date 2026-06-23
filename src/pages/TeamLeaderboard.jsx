@@ -13,7 +13,6 @@ const COLS = [
   { key: 'rebounds',        label: 'REB',  desc: 'Rebounds per game' },
   { key: 'steals',          label: 'STL',  desc: 'Steals per game' },
   { key: 'blocks',          label: 'BLK',  desc: 'Blocks per game' },
-  { key: 'shot_percentage', label: 'FG%',  desc: 'Field goal %' },
   { key: 'net_rating',      label: 'NET',  desc: 'Net rating per game' },
   { key: 'games',           label: 'GP',   desc: 'Games played' },
 ]
@@ -21,7 +20,7 @@ const COLS = [
 function calcNetRating(records) {
   if (!records.length) return 0
   const sum = records.reduce((s, r) =>
-    s + (r.points * 1) + (r.assists * 1.5) + (r.rebounds * 1.2) + (r.steals * 2) + (r.blocks * 2) + (r.shot_percentage * 0.5), 0)
+    s + (r.points * 1) + (r.assists * 1.5) + (r.rebounds * 1.2) + (r.steals * 2) + (r.blocks * 2), 0)
   return +(sum / records.length).toFixed(1)
 }
 
@@ -76,7 +75,6 @@ export default function TeamLeaderboard() {
         rebounds:        +avg(records, 'rebounds').toFixed(1),
         steals:          +avg(records, 'steals').toFixed(1),
         blocks:          +avg(records, 'blocks').toFixed(1),
-        shot_percentage: +avg(records, 'shot_percentage').toFixed(1),
         net_rating:      calcNetRating(records),
       }))
 
@@ -224,7 +222,7 @@ export default function TeamLeaderboard() {
                               : sortKey === col.key ? 'var(--accent)' : 'var(--text)',
                             fontWeight: (col.key === 'net_rating' || sortKey === col.key) ? 700 : 400,
                           }}>
-                            {col.key === 'shot_percentage' ? `${row[col.key]}%` : row[col.key]}
+                            {row[col.key]}
                           </span>
                         </td>
                       ))}
@@ -253,7 +251,7 @@ export default function TeamLeaderboard() {
                 color: 'var(--text)', margin: '0 0 4px',
               }}>Net Rating Rankings</h2>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)' }}>
-                (PTS × 1) + (AST × 1.5) + (REB × 1.2) + (STL × 2) + (BLK × 2) + (FG% × 0.5) — per game
+                (PTS × 1) + (AST × 1.5) + (REB × 1.2) + (STL × 2) + (BLK × 2) — per game
               </p>
             </div>
             <div className="card" style={{ padding: '24px 24px 16px' }}>

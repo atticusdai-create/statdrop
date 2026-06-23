@@ -29,7 +29,6 @@ export default function StatLog() {
     rebounds: '',
     steals: '',
     blocks: '',
-    shot_percentage: '',
   })
 
   useEffect(() => {
@@ -82,7 +81,6 @@ export default function StatLog() {
       rebounds:        Number(form.rebounds) || 0,
       steals:          Number(form.steals) || 0,
       blocks:          Number(form.blocks) || 0,
-      shot_percentage: Number(form.shot_percentage) || 0,
     }])
 
     setLoading(false)
@@ -129,7 +127,6 @@ export default function StatLog() {
     { key: 'rebounds',        label: 'Rebounds',        unit: '',  step: '1',   min: '0', max: '50'  },
     { key: 'steals',          label: 'Steals',          unit: '',  step: '1',   min: '0', max: '20'  },
     { key: 'blocks',          label: 'Blocks',          unit: '',  step: '1',   min: '0', max: '20'  },
-    { key: 'shot_percentage', label: 'Shot Percentage', unit: '%', step: '0.1', min: '0', max: '100' },
   ]
 
   return (
@@ -215,7 +212,7 @@ export default function StatLog() {
           <p className="label" style={{ marginBottom: '16px' }}>Stats from this game</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             {statFields.map(({ key, label, unit, step, min, max }) => (
-              <div key={key} style={key === 'shot_percentage' ? { gridColumn: '1 / -1' } : {}}>
+              <div key={key}>
                 <label className="label" htmlFor={key}>
                   {label}{unit ? ` (${unit})` : ''}
                 </label>
