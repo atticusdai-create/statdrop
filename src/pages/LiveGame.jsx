@@ -15,6 +15,16 @@ const STATS = [
 
 const ZERO = { points: 0, assists: 0, rebounds: 0, steals: 0, blocks: 0 }
 
+const STAT_ALIASES = {
+  point: 'points', points: 'points', pts: 'points', score: 'points', scored: 'points',
+  assist: 'assists', assists: 'assists', ast: 'assists',
+  rebound: 'rebounds', rebounds: 'rebounds', reb: 'rebounds', board: 'rebounds', boards: 'rebounds',
+  steal: 'steals', steals: 'steals', stl: 'steals', stole: 'steals',
+  block: 'blocks', blocks: 'blocks', blk: 'blocks', blocked: 'blocks',
+}
+
+const NUMBER_WORDS = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10 }
+
 export default function LiveGame() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -27,14 +37,39 @@ export default function LiveGame() {
   const [setupError, setSetupError] = useState('')
   const [ended, setEnded] = useState(false)
 
-  const [playerTotals, setPlayerTotals] = useState({})  // { [playerId]: { points, … } }
-  const [flash, setFlash] = useState({})                 // { [playerId]: statKey | null }
-  const [savingSet, setSavingSet] = useState(new Set())  // player IDs currently saving
+  const [playerTotals, setPlayerTotals] = useState({})
+  const [flash, setFlash] = useState({})
+  const [savingSet, setSavingSet] = useState(new Set())
 
-  const totalsRef = useRef({})    // always-current mirror of playerTotals for stale-free reads
-  const recordIds = useRef({})    // { [playerId]: supabase row id }
-  const pendingRef = useRef({})   // { [playerId]: latest totals to save }
-  const savingFlags = useRef({})  // { [playerId]: boolean } — tracks active save loops
+  const [voiceActive, setVoiceActive] = useState(false)
+  const [liveTranscript, setLiveTranscript] = useState('')
+  const [lastEntry, setLastEntry] = useState(null)
+
+  const totalsRef = useRef({})
+  const recordIds = useRef({})
+  const pendingRef = useRef({})
+  const savingFlags = useRef({})
+  const recognitionRef = useRef(null)
+  const voiceActiveRef = useRef(false)
+  const playersRef = useRef(players)
+  const lastEntryTimerRef = useRef(null)
+
+  useEffect(() => { playersRef.current = players }, [players])
+
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = '@keyframes voicePulse{0%,100%{opacity:1}50%{opacity:0.3}}'
+    document.head.appendChild(style)
+    return () => style.remove()
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      voiceActiveRef.current = false
+      recognitionRef.current?.stop()
+      if (lastEntryTimerRef.current) clearTimeout(lastEntryTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -89,9 +124,9 @@ export default function LiveGame() {
     }
   }
 
-  function handleTap(playerId, statKey) {
+  function handleTap(playerId, statKey, amount = 1) {
     const cur = totalsRef.current[playerId] || { ...ZERO }
-    const next = { ...cur, [statKey]: cur[statKey] + 1 }
+    const next = { ...cur, [statKey]: cur[statKey] + amount }
     totalsRef.current[playerId] = next
     pendingRef.current[playerId] = next
     setPlayerTotals(prev => ({ ...prev, [playerId]: next }))
@@ -102,6 +137,109 @@ export default function LiveGame() {
     }, 220)
 
     if (!savingFlags.current[playerId]) runSaveLoop(playerId)
+  }
+
+  function logStat(playerId, statKey, amount = 1) {
+    handleTap(playerId, statKey, amount)
+    if (lastEntryTimerRef.current) clearTimeout(lastEntryTimerRef.current)
+    const player = playersRef.current.find(p => p.id === playerId)
+    const stat = STATS.find(s => s.key === statKey)
+    setLastEntry({ playerId, statKey, amount, playerName: player?.name || '', statLabel: stat?.label, color: stat?.color })
+    lastEntryTimerRef.current = setTimeout(() => setLastEntry(null), 5000)
+  }
+
+  function handleUndo() {
+    if (!lastEntry) return
+    if (lastEntryTimerRef.current) clearTimeout(lastEntryTimerRef.current)
+    const { playerId, statKey, amount } = lastEntry
+    const cur = totalsRef.current[playerId] || { ...ZERO }
+    const next = { ...cur, [statKey]: Math.max(0, cur[statKey] - amount) }
+    totalsRef.current[playerId] = next
+    pendingRef.current[playerId] = next
+    setPlayerTotals(prev => ({ ...prev, [playerId]: next }))
+    if (!savingFlags.current[playerId]) runSaveLoop(playerId)
+    setLastEntry(null)
+  }
+
+  function parseVoiceCommand(transcript) {
+    const words = transcript.toLowerCase().trim().split(/\s+/)
+    if (words.length < 2) return null
+
+    let amount = 1
+    let rest = words
+    const first = words[0]
+    if (/^\d+$/.test(first)) {
+      amount = parseInt(first, 10)
+      rest = words.slice(1)
+    } else if (NUMBER_WORDS[first] !== undefined) {
+      amount = NUMBER_WORDS[first]
+      rest = words.slice(1)
+    }
+
+    if (rest.length < 2) return null
+    const statKey = STAT_ALIASES[rest[0]]
+    if (!statKey) return null
+    const nameQuery = rest.slice(1).join(' ')
+    const player = playersRef.current.find(p => {
+      const name = p.name.toLowerCase()
+      const firstName = name.split(' ')[0]
+      return name.includes(nameQuery) || nameQuery.includes(firstName)
+    })
+    return player ? { statKey, player, amount } : null
+  }
+
+  function launchRecognition() {
+    if (!voiceActiveRef.current) return
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    const recognition = new SR()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognitionRef.current = recognition
+
+    recognition.onresult = e => {
+      const transcript = e.results[0][0].transcript.trim()
+      console.log('[voice]', transcript)
+      const match = parseVoiceCommand(transcript)
+      if (match) logStat(match.player.id, match.statKey, match.amount)
+      recognition.stop()
+    }
+
+    recognition.onend = () => {
+      if (voiceActiveRef.current) setTimeout(launchRecognition, 100)
+    }
+
+    recognition.onerror = e => {
+      if (e.error !== 'aborted' && e.error !== 'no-speech') {
+        console.error('Speech recognition error:', e.error)
+      }
+      // onend fires after onerror and will restart
+    }
+
+    try {
+      recognition.start()
+    } catch (err) {
+      console.error('Failed to start recognition:', err)
+      if (voiceActiveRef.current) setTimeout(launchRecognition, 500)
+    }
+  }
+
+  function startListening() {
+    if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      alert('Voice input requires Chrome, Edge, or Safari.')
+      return
+    }
+    voiceActiveRef.current = true
+    setVoiceActive(true)
+    launchRecognition()
+  }
+
+  function stopListening() {
+    voiceActiveRef.current = false
+    recognitionRef.current?.stop()
+    recognitionRef.current = null
+    setVoiceActive(false)
+    setLiveTranscript('')
   }
 
   function startGame() {
@@ -123,11 +261,11 @@ export default function LiveGame() {
   }
 
   function handleEndGame() {
+    stopListening()
     setEnded(true)
     setTimeout(() => navigate(`/team/${selectedTeam}`), 1600)
   }
 
-  // Team-wide totals for the scoreboard
   const teamTotals = Object.values(playerTotals).reduce((acc, t) => {
     STATS.forEach(({ key }) => { acc[key] = (acc[key] || 0) + (t[key] || 0) })
     return acc
@@ -135,7 +273,6 @@ export default function LiveGame() {
 
   const anyUnsaved = savingSet.size > 0
 
-  // — Auth guard —
   if (!user) {
     return (
       <div style={{ textAlign: 'center', padding: '120px 24px' }}>
@@ -145,7 +282,6 @@ export default function LiveGame() {
     )
   }
 
-  // — No teams —
   if (teams.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '120px 24px' }}>
@@ -164,7 +300,6 @@ export default function LiveGame() {
     )
   }
 
-  // — Game over —
   if (ended) {
     const teamName = teams.find(t => t.id === selectedTeam)?.name || 'Team'
     return (
@@ -181,7 +316,6 @@ export default function LiveGame() {
     )
   }
 
-  // — Setup —
   if (!gameStarted) {
     return (
       <div style={{ maxWidth: '480px', margin: '0 auto', padding: '48px 24px' }}>
@@ -251,22 +385,56 @@ export default function LiveGame() {
     )
   }
 
-  // — Game tracking view —
   const teamName = teams.find(t => t.id === selectedTeam)?.name || ''
 
   return (
     <div style={{ background: 'var(--ground)', minHeight: '100svh' }}>
 
-      {/* Sticky header: team label + scoreboard */}
+      {/* Undo toast */}
+      {lastEntry && (
+        <div style={{
+          position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 999,
+          display: 'flex', alignItems: 'center', gap: '10px',
+          background: 'var(--surface)', border: '1.5px solid var(--border)',
+          borderRadius: '100px', padding: '8px 8px 8px 18px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{
+            fontFamily: 'var(--font-display)', fontSize: '13px', fontWeight: 700,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: lastEntry.color,
+          }}>
+            &#10003; {lastEntry.amount > 1 ? `${lastEntry.amount}× ` : ''}{lastEntry.statLabel} &mdash; {lastEntry.playerName}
+          </span>
+          <button
+            onClick={handleUndo}
+            style={{
+              padding: '6px 14px', borderRadius: '100px',
+              background: 'transparent', border: '1.5px solid var(--border)',
+              color: 'var(--muted)', cursor: 'pointer',
+              fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E11D48'; e.currentTarget.style.color = '#E11D48' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)' }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
+      {/* Sticky header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 10,
         background: 'var(--surface)', borderBottom: '1px solid var(--border)',
         padding: '10px 14px',
       }}>
-        {/* Team name + save indicator + End Game */}
+        {/* Row 1: team name + save indicator + End Game */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: '10px',
+          marginBottom: '8px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{
@@ -305,7 +473,44 @@ export default function LiveGame() {
           </div>
         </div>
 
-        {/* Live team scoreboard */}
+        {/* Row 2: voice toggle button */}
+        <button
+          onClick={voiceActive ? stopListening : startListening}
+          style={{
+            width: '100%', marginBottom: '8px',
+            padding: '8px 14px', borderRadius: '8px',
+            border: `1.5px solid ${voiceActive ? '#E11D48' : 'var(--border)'}`,
+            background: voiceActive ? 'rgba(225,29,72,0.07)' : 'transparent',
+            color: voiceActive ? '#E11D48' : 'var(--muted)',
+            fontFamily: 'var(--font-display)',
+            fontSize: '12px', fontWeight: 700, letterSpacing: '0.1em',
+            textTransform: 'uppercase', cursor: 'pointer',
+            transition: 'all 0.15s',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+            lineHeight: 1,
+          }}
+        >
+          {voiceActive ? (
+            <>
+              <span style={{
+                display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                background: '#E11D48', flexShrink: 0,
+                animation: 'voicePulse 1s ease-in-out infinite',
+              }} />
+              Stop Listening
+            </>
+          ) : (
+            <>
+              <span style={{
+                display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                background: 'var(--muted)', flexShrink: 0,
+              }} />
+              Start Listening
+            </>
+          )}
+        </button>
+
+        {/* Row 3: live team scoreboard */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '4px' }}>
           {STATS.map(({ key, label, color }) => (
             <div key={key} style={{
@@ -328,6 +533,29 @@ export default function LiveGame() {
             </div>
           ))}
         </div>
+
+        {/* Row 4: live transcript (only when voice is active) */}
+        {voiceActive && (
+          <div style={{
+            marginTop: '8px', padding: '7px 12px',
+            background: 'rgba(225,29,72,0.05)', borderRadius: '7px',
+            border: '1px solid rgba(225,29,72,0.18)',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            minHeight: '30px',
+          }}>
+            <span style={{
+              width: '5px', height: '5px', borderRadius: '50%',
+              background: '#E11D48', flexShrink: 0,
+              animation: 'voicePulse 1s ease-in-out infinite',
+            }} />
+            <span style={{
+              fontFamily: 'var(--font-data)', fontSize: '12px',
+              color: 'var(--muted)', fontStyle: 'italic',
+            }}>
+              Listening…
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Player cards */}
@@ -346,7 +574,6 @@ export default function LiveGame() {
           return (
             <div key={player.id} className="card" style={{ padding: '14px' }}>
 
-              {/* Player name + per-card save dot */}
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 marginBottom: '10px',
@@ -365,7 +592,6 @@ export default function LiveGame() {
                 }}>●</span>
               </div>
 
-              {/* Stat counters */}
               <div style={{
                 display: 'grid', gridTemplateColumns: 'repeat(5,1fr)',
                 gap: '4px', marginBottom: '8px',
@@ -394,12 +620,11 @@ export default function LiveGame() {
                 ))}
               </div>
 
-              {/* Tap buttons */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '4px' }}>
-                {STATS.map(({ key, label, color, bg }) => (
+                {STATS.map(({ key, label, color }) => (
                   <button
                     key={key}
-                    onClick={() => handleTap(player.id, key)}
+                    onClick={() => logStat(player.id, key)}
                     style={{
                       padding: '12px 2px',
                       borderRadius: '7px',
