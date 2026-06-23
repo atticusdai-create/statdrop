@@ -23,6 +23,7 @@ drop policy if exists "auth insert players"      on players;
 drop policy if exists "public insert players"    on players;
 drop policy if exists "public read stats"        on game_stats;
 drop policy if exists "auth insert stats"        on game_stats;
+drop policy if exists "auth update stats"        on game_stats;
 
 -- 5. teams ─────────────────────────────────────────────────────────────────
 create policy "public read teams"
@@ -63,4 +64,10 @@ create policy "public read stats"
 create policy "auth insert stats"
   on game_stats for insert
   to authenticated
+  with check (true);
+
+create policy "auth update stats"
+  on game_stats for update
+  to authenticated
+  using (true)
   with check (true);

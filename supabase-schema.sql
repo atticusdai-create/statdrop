@@ -24,6 +24,7 @@ create table if not exists game_stats (
   game_date       date not null,
   points          integer default 0,
   assists         integer default 0,
+  rebounds        integer default 0,
   steals          integer default 0,
   blocks          integer default 0,
   created_at      timestamptz default now()
@@ -71,4 +72,10 @@ create policy "public read stats"
 create policy "auth insert stats"
   on game_stats for insert
   to authenticated
+  with check (true);
+
+create policy "auth update stats"
+  on game_stats for update
+  to authenticated
+  using (true)
   with check (true);
