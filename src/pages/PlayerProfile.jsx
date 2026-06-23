@@ -16,7 +16,13 @@ const STAT_CHARTS = [
 ]
 
 function calcNetRating(s) {
-  return +((s.points * 1) + (s.assists * 1.5) + (s.rebounds * 1.2) + (s.steals * 2) + (s.blocks * 2)).toFixed(2)
+  return +(
+    ((s.points || 0) * 1) +
+    ((s.assists || 0) * 1.5) +
+    ((s.rebounds || 0) * 1.2) +
+    ((s.steals || 0) * 2) +
+    ((s.blocks || 0) * 2)
+  ).toFixed(2)
 }
 
 function fmt(dateStr) {
@@ -31,15 +37,16 @@ function CustomTooltip({ active, payload, label, unit }) {
       background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: '8px', padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
     }}>
-      <p style={{ margin: '0 0 4px', fontSize: '12px', color: 'var(--muted)' }}>{label}</p>
+      <p style={{ margin: '0 0 4px', fontSize: '12px', color: 'var(--muted)' }}>{fmt(label)}</p>
       <p style={{ margin: 0, fontFamily: 'var(--font-data)', fontSize: '18px', fontWeight: 700, color: payload[0].color }}>
-        {payload[0].payload[payload[0].dataKey]}{unit}
+        {payload[0].value}{unit}
       </p>
     </div>
   )
 }
 
 function StatChart({ data, statKey, label, color }) {
+  console.log('[StatChart]', label, 'data:', data)
   const values = data.map(d => d[statKey])
   const max = Math.max(...values, 1)
   const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) : '—'

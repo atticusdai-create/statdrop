@@ -125,7 +125,7 @@ export default function LiveGame() {
 
   function handleTap(playerId, statKey, amount = 1) {
     const cur = totalsRef.current[playerId] || { ...ZERO }
-    const next = { ...cur, [statKey]: cur[statKey] + amount }
+    const next = { ...cur, [statKey]: Math.max(0, cur[statKey] + amount) }
     totalsRef.current[playerId] = next
     pendingRef.current[playerId] = next
     setPlayerTotals(prev => ({ ...prev, [playerId]: next }))
@@ -136,6 +136,10 @@ export default function LiveGame() {
     }, 220)
 
     if (!savingFlags.current[playerId]) runSaveLoop(playerId)
+  }
+
+  function subtractStat(playerId, statKey) {
+    handleTap(playerId, statKey, -1)
   }
 
   function logStat(playerId, statKey, amount = 1) {
@@ -192,16 +196,29 @@ export default function LiveGame() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     const recognition = new SR()
     recognition.continuous = false
-    recognition.interimResults = false
+    recognition.interimResults = true
     recognition.lang = 'en-US'
     recognitionRef.current = recognition
 
     recognition.onresult = e => {
-      const transcript = e.results[0][0].transcript.trim()
-      console.log('[voice]', transcript)
-      const match = parseVoiceCommand(transcript)
-      if (match) logStat(match.player.id, match.statKey, match.amount)
-      recognition.stop()
+      let interim = ''
+      let final = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) final += t
+        else interim += t
+      }
+      if (final) {
+        const t = final.trim()
+        console.log('[voice]', t)
+        setLiveTranscript(t)
+        const match = parseVoiceCommand(t)
+        if (match) logStat(match.player.id, match.statKey, match.amount)
+        setTimeout(() => setLiveTranscript(''), 800)
+        recognition.stop()
+      } else {
+        setLiveTranscript(interim)
+      }
     }
 
     recognition.onend = () => {
@@ -549,9 +566,10 @@ export default function LiveGame() {
             }} />
             <span style={{
               fontFamily: 'var(--font-data)', fontSize: '12px',
-              color: 'var(--muted)', fontStyle: 'italic',
+              color: liveTranscript ? 'var(--text)' : 'var(--muted)',
+              fontStyle: liveTranscript ? 'normal' : 'italic',
             }}>
-              Listening…
+              {liveTranscript || 'Listening…'}
             </span>
           </div>
         )}
@@ -565,6 +583,41 @@ export default function LiveGame() {
         gap: '10px',
         maxWidth: '1280px', margin: '0 auto',
       }}>
+        {/* Voice command instructions */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: '10px', padding: '12px 16px',
+          }}>
+            <p style={{
+              fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
+              letterSpacing: '0.15em', textTransform: 'uppercase',
+              color: 'var(--muted)', margin: '0 0 8px',
+            }}>
+              Voice Commands — say: [stat] [name] or [number] [stat] [name]
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px' }}>
+              {[
+                'point [name]',
+                '2 points [name]',
+                '3 points [name]',
+                'assist [name]',
+                'rebound [name]',
+                'steal [name]',
+                'block [name]',
+              ].map(ex => (
+                <span key={ex} style={{
+                  fontFamily: 'var(--font-data)', fontSize: '11px', color: 'var(--accent)',
+                  background: 'var(--ground)', borderRadius: '5px', padding: '2px 7px',
+                  border: '1px solid var(--border)',
+                }}>
+                  "{ex}"
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {players.map(player => {
           const t = playerTotals[player.id] || ZERO
           const playerFlash = flash[player.id]
@@ -619,28 +672,77 @@ export default function LiveGame() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '4px' }}>
-                {STATS.map(({ key, label, color }) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {/* Points: +1, +2, +3, −PTS */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                  {[1, 2, 3].map(amt => (
+                    <button
+                      key={amt}
+                      onClick={() => logStat(player.id, 'points', amt)}
+                      style={{
+                        padding: '10px 2px', borderRadius: '7px',
+                        border: `1.5px solid ${playerFlash === 'points' ? '#1A5CFF' : 'var(--border)'}`,
+                        background: playerFlash === 'points' ? '#1A5CFF' : 'transparent',
+                        color: playerFlash === 'points' ? '#fff' : '#1A5CFF',
+                        fontFamily: 'var(--font-display)', fontSize: '12px', fontWeight: 800,
+                        letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer',
+                        transition: 'background 0.1s, color 0.08s, border-color 0.08s',
+                        WebkitTapHighlightColor: 'transparent', userSelect: 'none', lineHeight: 1,
+                      }}
+                    >
+                      +{amt}
+                    </button>
+                  ))}
                   <button
-                    key={key}
-                    onClick={() => logStat(player.id, key)}
+                    onClick={() => subtractStat(player.id, 'points')}
                     style={{
-                      padding: '12px 2px',
-                      borderRadius: '7px',
-                      border: `1.5px solid ${playerFlash === key ? color : 'var(--border)'}`,
-                      background: playerFlash === key ? color : 'transparent',
-                      color: playerFlash === key ? '#fff' : color,
-                      fontFamily: 'var(--font-display)',
-                      fontSize: '12px', fontWeight: 800,
-                      letterSpacing: '0.03em', textTransform: 'uppercase',
-                      cursor: 'pointer',
-                      transition: 'background 0.1s, color 0.08s, border-color 0.08s',
-                      WebkitTapHighlightColor: 'transparent',
-                      userSelect: 'none', lineHeight: 1,
+                      padding: '10px 2px', borderRadius: '7px',
+                      border: '1.5px solid var(--border)', background: 'transparent',
+                      color: 'var(--muted)', fontFamily: 'var(--font-display)',
+                      fontSize: '12px', fontWeight: 800, letterSpacing: '0.03em',
+                      textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.1s',
+                      WebkitTapHighlightColor: 'transparent', userSelect: 'none', lineHeight: 1,
                     }}
                   >
-                    +{label}
+                    −PTS
                   </button>
+                </div>
+                {/* AST + REB row, then STL + BLK row — each as [+STAT][−STAT] pairs */}
+                {[STATS.slice(1, 3), STATS.slice(3)].map((group, gi) => (
+                  <div key={gi} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                    {group.flatMap(({ key, label, color }) => [
+                      <button
+                        key={`+${key}`}
+                        onClick={() => logStat(player.id, key)}
+                        style={{
+                          padding: '10px 2px', borderRadius: '7px',
+                          border: `1.5px solid ${playerFlash === key ? color : 'var(--border)'}`,
+                          background: playerFlash === key ? color : 'transparent',
+                          color: playerFlash === key ? '#fff' : color,
+                          fontFamily: 'var(--font-display)', fontSize: '12px', fontWeight: 800,
+                          letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer',
+                          transition: 'background 0.1s, color 0.08s, border-color 0.08s',
+                          WebkitTapHighlightColor: 'transparent', userSelect: 'none', lineHeight: 1,
+                        }}
+                      >
+                        +{label}
+                      </button>,
+                      <button
+                        key={`-${key}`}
+                        onClick={() => subtractStat(player.id, key)}
+                        style={{
+                          padding: '10px 2px', borderRadius: '7px',
+                          border: '1.5px solid var(--border)', background: 'transparent',
+                          color: 'var(--muted)', fontFamily: 'var(--font-display)',
+                          fontSize: '12px', fontWeight: 800, letterSpacing: '0.03em',
+                          textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.1s',
+                          WebkitTapHighlightColor: 'transparent', userSelect: 'none', lineHeight: 1,
+                        }}
+                      >
+                        −{label}
+                      </button>,
+                    ])}
+                  </div>
                 ))}
               </div>
 

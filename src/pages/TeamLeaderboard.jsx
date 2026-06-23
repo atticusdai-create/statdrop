@@ -13,15 +13,18 @@ const COLS = [
   { key: 'rebounds',        label: 'REB',     desc: 'Total rebounds' },
   { key: 'steals',          label: 'STL',     desc: 'Total steals' },
   { key: 'blocks',          label: 'BLK',     desc: 'Total blocks' },
-  { key: 'avg_net_rating',  label: 'Net Rtg', desc: 'Net rating per game (average)' },
+  { key: 'avg_net_rating',  label: 'Avg Net Rtg', desc: 'Average net rating per game' },
   { key: 'games',           label: 'GP',      desc: 'Games played' },
 ]
 
-function calcNetRating(records) {
-  if (!records.length) return 0
-  const total = records.reduce((s, r) =>
-    s + (r.points * 1) + (r.assists * 1.5) + (r.rebounds * 1.2) + (r.steals * 2) + (r.blocks * 2), 0)
-  return +total.toFixed(1)
+function calcNetRatingForRow(r) {
+  return (
+    (r.points || 0) * 1 +
+    (r.assists || 0) * 1.5 +
+    (r.rebounds || 0) * 1.2 +
+    (r.steals || 0) * 2 +
+    (r.blocks || 0) * 2
+  )
 }
 
 function sumStat(records, key) {
@@ -67,7 +70,7 @@ export default function TeamLeaderboard() {
 
       const compiled = Object.values(byPlayer).map(({ playerId, name, records }) => {
         const games = records.length
-        const netTotal = calcNetRating(records)
+        const netSum = records.reduce((s, r) => s + calcNetRatingForRow(r), 0)
         return {
           playerId,
           name,
@@ -77,7 +80,7 @@ export default function TeamLeaderboard() {
           rebounds:        sumStat(records, 'rebounds'),
           steals:          sumStat(records, 'steals'),
           blocks:          sumStat(records, 'blocks'),
-          avg_net_rating:  games > 0 ? +(netTotal / games).toFixed(1) : 0,
+          avg_net_rating:  games > 0 ? +(netSum / games).toFixed(1) : 0,
         }
       })
 
@@ -152,7 +155,7 @@ export default function TeamLeaderboard() {
                 fontFamily: 'var(--font-body)', fontWeight: 600,
                 textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px',
               }}>
-                ● Live
+                Track Stats Live
               </Link>
             )}
             {isCoach && (
