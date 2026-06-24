@@ -604,7 +604,7 @@ export default function LiveGame() {
                 background: '#16A34A', flexShrink: 0,
                 animation: 'voicePulse 0.8s ease-in-out infinite',
               }} />
-              Listening...
+              Tap to Stop
             </>
           ) : (
             <>
