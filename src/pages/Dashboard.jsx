@@ -9,6 +9,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -23,6 +25,16 @@ export default function Dashboard() {
         setLoading(false)
       })
   }, [user])
+
+  async function handleDeleteAccount() {
+    setDeletingAccount(true)
+    await supabase.from('teams').delete().eq('coach_id', user.id)
+    const { error: adminErr } = await supabase.auth.admin.deleteUser(user.id)
+    if (adminErr) {
+      await supabase.auth.signOut()
+    }
+    navigate('/')
+  }
 
   async function handleDelete() {
     if (!confirmDelete) return
@@ -136,6 +148,83 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: '80px', paddingTop: '32px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+        <button
+          onClick={() => setConfirmDeleteAccount(true)}
+          style={{
+            background: 'none', border: '1px solid var(--border)',
+            color: 'var(--muted)', fontSize: '13px', fontWeight: 600,
+            padding: '8px 18px', borderRadius: '6px', cursor: 'pointer',
+            transition: 'color 0.15s, border-color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.color = '#ef4444'
+            e.currentTarget.style.borderColor = '#ef4444'
+            e.currentTarget.style.background = 'rgba(239,68,68,0.07)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.color = 'var(--muted)'
+            e.currentTarget.style.borderColor = 'var(--border)'
+            e.currentTarget.style.background = 'none'
+          }}
+        >
+          Delete Account
+        </button>
+      </div>
+
+      {confirmDeleteAccount && (
+        <div
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => { if (!deletingAccount) setConfirmDeleteAccount(false) }}
+        >
+          <div
+            className="card"
+            style={{ padding: '36px', maxWidth: '400px', width: '90%', borderRadius: '8px' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{
+              fontFamily: 'var(--font-display)', fontSize: '22px',
+              fontWeight: 800, textTransform: 'uppercase',
+              letterSpacing: '-0.01em', color: 'var(--text)',
+              margin: '0 0 12px',
+            }}>Are you sure?</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '14px', margin: '0 0 28px', lineHeight: 1.6 }}>
+              This will permanently delete your account and all your teams and data.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setConfirmDeleteAccount(false)}
+                disabled={deletingAccount}
+                style={{
+                  padding: '9px 18px', fontSize: '13px', fontWeight: 600,
+                  background: 'none', border: '1px solid var(--border)',
+                  color: 'var(--muted)', borderRadius: '6px', cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount}
+                style={{
+                  padding: '9px 18px', fontSize: '13px', fontWeight: 600,
+                  background: '#ef4444', border: 'none',
+                  color: '#fff', borderRadius: '6px', cursor: 'pointer',
+                  opacity: deletingAccount ? 0.6 : 1,
+                }}
+              >
+                {deletingAccount ? 'Deleting…' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

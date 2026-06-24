@@ -243,27 +243,28 @@ export default function LiveGame() {
     }
   }
 
-  function handleTap(playerId, statKey, amount = 1) {
+  function handleTap(playerId, statKey, amount = 1, btnKey = null) {
     const cur = totalsRef.current[playerId] || { ...ZERO }
     const next = { ...cur, [statKey]: Math.max(0, cur[statKey] + amount) }
     totalsRef.current[playerId] = next
     pendingRef.current[playerId] = next
     setPlayerTotals(prev => ({ ...prev, [playerId]: next }))
 
-    setFlash(prev => ({ ...prev, [playerId]: statKey }))
+    setFlash(prev => ({ ...prev, [playerId]: { stat: statKey, btn: btnKey } }))
     setTimeout(() => {
-      setFlash(prev => prev[playerId] === statKey ? { ...prev, [playerId]: null } : prev)
+      setFlash(prev => prev[playerId]?.btn === btnKey ? { ...prev, [playerId]: null } : prev)
     }, 220)
 
     if (!savingFlags.current[playerId]) runSaveLoop(playerId)
   }
 
   function subtractStat(playerId, statKey) {
-    handleTap(playerId, statKey, -1)
+    handleTap(playerId, statKey, -1, `${statKey}-`)
   }
 
   function logStat(playerId, statKey, amount = 1) {
-    handleTap(playerId, statKey, amount)
+    const btnKey = statKey === 'points' ? `pts+${amount}` : `${statKey}+`
+    handleTap(playerId, statKey, amount, btnKey)
     if (lastEntryTimerRef.current) clearTimeout(lastEntryTimerRef.current)
     const player = playersRef.current.find(p => p.id === playerId)
     const stat = STATS.find(s => s.key === statKey)
@@ -780,12 +781,12 @@ export default function LiveGame() {
                 {STATS.map(({ key, label, color, bg }) => (
                   <div key={key} style={{
                     textAlign: 'center', padding: '7px 2px',
-                    background: playerFlash === key ? bg : 'var(--ground)',
+                    background: playerFlash?.stat === key ? bg : 'var(--ground)',
                     borderRadius: '6px', transition: 'background 0.12s',
                   }}>
                     <div style={{
                       fontFamily: 'var(--font-data)', fontSize: '20px', fontWeight: 700,
-                      color: playerFlash === key ? color : 'var(--text)',
+                      color: playerFlash?.stat === key ? color : 'var(--text)',
                       lineHeight: 1, transition: 'color 0.12s',
                     }}>
                       {t[key]}
@@ -810,9 +811,9 @@ export default function LiveGame() {
                       onClick={() => logStat(player.id, 'points', amt)}
                       style={{
                         padding: '10px 2px', borderRadius: '7px',
-                        border: `1.5px solid ${playerFlash === 'points' ? '#1A5CFF' : 'var(--border)'}`,
-                        background: playerFlash === 'points' ? '#1A5CFF' : 'transparent',
-                        color: playerFlash === 'points' ? '#fff' : '#1A5CFF',
+                        border: `1.5px solid ${playerFlash?.btn === `pts+${amt}` ? '#1A5CFF' : 'var(--border)'}`,
+                        background: playerFlash?.btn === `pts+${amt}` ? '#1A5CFF' : 'transparent',
+                        color: playerFlash?.btn === `pts+${amt}` ? '#fff' : '#1A5CFF',
                         fontFamily: 'var(--font-display)', fontSize: '12px', fontWeight: 800,
                         letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer',
                         transition: 'background 0.1s, color 0.08s, border-color 0.08s',
@@ -845,9 +846,9 @@ export default function LiveGame() {
                         onClick={() => logStat(player.id, key)}
                         style={{
                           padding: '10px 2px', borderRadius: '7px',
-                          border: `1.5px solid ${playerFlash === key ? color : 'var(--border)'}`,
-                          background: playerFlash === key ? color : 'transparent',
-                          color: playerFlash === key ? '#fff' : color,
+                          border: `1.5px solid ${playerFlash?.btn === `${key}+` ? color : 'var(--border)'}`,
+                          background: playerFlash?.btn === `${key}+` ? color : 'transparent',
+                          color: playerFlash?.btn === `${key}+` ? '#fff' : color,
                           fontFamily: 'var(--font-display)', fontSize: '12px', fontWeight: 800,
                           letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer',
                           transition: 'background 0.1s, color 0.08s, border-color 0.08s',
