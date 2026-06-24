@@ -15,137 +15,6 @@ const STATS = [
 
 const ZERO = { points: 0, assists: 0, rebounds: 0, steals: 0, blocks: 0 }
 
-
-function levenshtein(a, b) {
-  if (Math.abs(a.length - b.length) > 2) return 99
-  const m = a.length, n = b.length
-  const dp = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0)
-  )
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
-  return dp[m][n]
-}
-
-const STAT_KEYWORDS = [
-  { key: 'blocks',   words: ['block', 'blocked', 'blocks', 'reject', 'rejected', 'rejection', 'swat', 'swatted', 'blocked the shot', 'blocked it', 'sent it back', 'denied', 'stuffed', 'goaltended'] },
-  { key: 'steals',   words: ['steal', 'stole', 'steals', 'stolen', 'rip', 'ripped', 'stripped', 'picked off', 'took it', 'picked it off', 'picked', 'deflected', 'poked away', 'got a hand on'] },
-  { key: 'rebounds', words: ['rebound', 'rebounded', 'rebounds', 'board', 'boards', 'glass', 'grabbed', 'got a rebound', 'pulled down', 'hauled in', 'snatched', 'boxed out', 'offensive board', 'defensive board', 'tip', 'tipped'] },
-  { key: 'assists',  words: ['assist', 'assisted', 'assists', 'pass', 'passed', 'dish', 'dished', 'feed', 'fed', 'dime', 'set up', 'helper', 'with the assist', 'found', 'threaded', 'hit him', 'hit her', 'connected', 'dropped off', 'kicked out', 'dished it', 'hockey assist'] },
-  { key: 'points',   words: ['score', 'scored', 'basket', 'bucket', 'buckets', 'layup', 'dunk', 'dunked', 'shot', 'made', 'makes', 'hit', 'points', 'pts', 'drain', 'drains', 'money', 'trey', 'three', 'triple', 'downtown', 'drove and scored', 'knocked down', 'drilled', 'nailed', 'dropped', 'put in', 'put it in', 'and one', 'converted', 'finished'] },
-]
-
-const NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
-
-function wordsToJerseyNum(words, startIdx) {
-  const ones = {
-    zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7,
-    eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13,
-    fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19,
-  }
-  const tens = { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 }
-  const w = words[startIdx]
-  if (!w) return null
-  if (w in ones) return { num: ones[w], endIdx: startIdx }
-  if (w in tens) {
-    const next = words[startIdx + 1]
-    if (next && next in ones && ones[next] > 0) return { num: tens[w] + ones[next], endIdx: startIdx + 1 }
-    return { num: tens[w], endIdx: startIdx }
-  }
-  return null
-}
-
-function parseVoiceLocally(transcript, players) {
-  const t = transcript.toLowerCase()
-  const words = t.split(/\W+/).filter(Boolean)
-  console.log('[voice] words:', words)
-  console.log('[voice] player names to match:', players.map(p => p.name))
-
-  let player = null
-  let jerseyWordStart = -1
-  let jerseyWordEnd = -1
-
-  // "number 23 ..." or "number twenty three ..." — explicit jersey number prefix
-  const numberKeywordIdx = words.indexOf('number')
-  if (numberKeywordIdx >= 0 && numberKeywordIdx < words.length - 1) {
-    const nextIdx = numberKeywordIdx + 1
-    const num = parseInt(words[nextIdx], 10)
-    if (!isNaN(num)) {
-      const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
-      if (jerseyMatch) { console.log(`[voice] jersey# converted: ${num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = nextIdx; jerseyWordEnd = nextIdx }
-    }
-    if (!player) {
-      const parsed = wordsToJerseyNum(words, nextIdx)
-      if (parsed) {
-        const jerseyMatch = players.find(p => Number(p.jersey_number) === parsed.num)
-        if (jerseyMatch) { console.log(`[voice] jersey# converted: ${parsed.num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = nextIdx; jerseyWordEnd = parsed.endIdx }
-      }
-    }
-  }
-  // Scan every word for a jersey number match (digit or word-form)
-  if (!player) {
-    for (let i = 0; i < words.length; i++) {
-      if (/^\d+$/.test(words[i])) {
-        const num = parseInt(words[i], 10)
-        const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
-        if (jerseyMatch) { console.log(`[voice] jersey# converted: ${num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = i; jerseyWordEnd = i; break }
-      } else {
-        const parsed = wordsToJerseyNum(words, i)
-        if (parsed) {
-          const jerseyMatch = players.find(p => Number(p.jersey_number) === parsed.num)
-          if (jerseyMatch) { console.log(`[voice] jersey# converted: ${parsed.num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = i; jerseyWordEnd = parsed.endIdx; break }
-        }
-      }
-    }
-  }
-
-  // Fall back to name matching
-  if (!player) {
-    player = players.find(p => {
-      const nameParts = p.name.toLowerCase().split(/\s+/)
-      const matched = nameParts.some(namePart => {
-        if (namePart.length <= 3) return words.includes(namePart)
-        return words.some(w => w.length >= 3 && levenshtein(w, namePart) <= 1)
-      })
-      console.log(`[voice] checking "${p.name}" (parts: ${JSON.stringify(nameParts)}) →`, matched)
-      return matched
-    })
-  }
-  if (!player) return null
-
-  // Match stat by keyword phrases/words
-  let statKey = null
-  for (const { key, words: kws } of STAT_KEYWORDS) {
-    if (kws.some(kw => t.includes(kw))) { statKey = key; break }
-  }
-  if (!statKey) return null
-
-  // Parse amount: digit (skip jersey number word) > number word
-  let amount = null
-  for (let i = 0; i < words.length; i++) {
-    if (i >= jerseyWordStart && i <= jerseyWordEnd) continue
-    if (/^\d+$/.test(words[i])) { amount = parseInt(words[i], 10); break }
-  }
-  if (amount === null) {
-    for (const [word, val] of Object.entries(NUM_WORDS)) {
-      if (words.includes(word)) { amount = val; break }
-    }
-  }
-
-  // Default amounts: 3 for three-pointer cues, 2 for other points, 1 for everything else
-  if (statKey === 'points') {
-    const isThree = ['three', 'trey', 'triple', 'downtown'].some(kw => t.includes(kw))
-    amount = amount ?? (isThree ? 3 : 2)
-  } else {
-    amount = amount ?? 1
-  }
-
-  return { player, statKey, amount }
-}
-
 export default function LiveGame() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -162,34 +31,19 @@ export default function LiveGame() {
   const [flash, setFlash] = useState({})
   const [savingSet, setSavingSet] = useState(new Set())
 
-  const [pttListening, setPttListening] = useState(false)
-  const [liveTranscript, setLiveTranscript] = useState('')
   const [lastEntry, setLastEntry] = useState(null)
 
   const totalsRef = useRef({})
   const recordIds = useRef({})
   const pendingRef = useRef({})
   const savingFlags = useRef({})
-  const recognitionRef = useRef(null)
-  const micPermittedRef = useRef(false)
-  const voiceActiveRef = useRef(false)
-  const audioUnlockedRef = useRef(false)
   const playersRef = useRef(players)
   const lastEntryTimerRef = useRef(null)
 
   useEffect(() => { playersRef.current = players }, [players])
 
   useEffect(() => {
-    const style = document.createElement('style')
-    style.textContent = '@keyframes voicePulse{0%,100%{opacity:1}50%{opacity:0.3}}'
-    document.head.appendChild(style)
-    return () => style.remove()
-  }, [])
-
-  useEffect(() => {
     return () => {
-      voiceActiveRef.current = false
-      recognitionRef.current?.stop()
       if (lastEntryTimerRef.current) clearTimeout(lastEntryTimerRef.current)
     }
   }, [])
@@ -288,127 +142,6 @@ export default function LiveGame() {
     setLastEntry(null)
   }
 
-  function startRecognitionLoop() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR || !voiceActiveRef.current) return
-
-    const recognition = new SR()
-    recognition.continuous = false
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognitionRef.current = recognition
-
-    recognition.onresult = e => {
-      console.log('[voice] onresult fired — speech received on this device')
-      const t = e.results[0][0].transcript.trim()
-      console.log('[voice] transcript:', JSON.stringify(t))
-      setLiveTranscript(t)
-      const match = parseVoiceLocally(t, playersRef.current)
-      if (match) {
-        logStat(match.player.id, match.statKey, match.amount)
-        setTimeout(() => setLiveTranscript(''), 1500)
-      } else {
-        setLiveTranscript("Didn't catch that…")
-        setTimeout(() => setLiveTranscript(''), 2000)
-      }
-    }
-
-    recognition.onend = () => {
-      recognitionRef.current = null
-      if (!voiceActiveRef.current) return
-      startRecognitionLoop()
-    }
-
-    recognition.onerror = e => {
-      if (e.error === 'aborted') return
-      console.error('Speech recognition error:', e.error)
-      recognitionRef.current = null
-      if (!voiceActiveRef.current) return
-      startRecognitionLoop()
-    }
-
-    try {
-      recognition.start()
-    } catch (err) {
-      console.error('Failed to start recognition:', err)
-      recognitionRef.current = null
-      if (voiceActiveRef.current) setTimeout(() => startRecognitionLoop(), 200)
-    }
-  }
-
-  function handleVoiceToggle() {
-    if (voiceActiveRef.current) {
-      voiceActiveRef.current = false
-      recognitionRef.current?.stop()
-      setPttListening(false)
-      setLiveTranscript('')
-      return
-    }
-
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { alert('Voice input requires Chrome, Edge, or Safari.'); return }
-
-    // iOS Safari: AudioContext must be unlocked synchronously in the gesture — no await
-    if (!audioUnlockedRef.current) {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)()
-        ctx.resume().then(() => ctx.close()).catch(() => {})
-      } catch {}
-      audioUnlockedRef.current = true
-    }
-
-    // iOS Safari: recognition must be instantiated AND started synchronously in the
-    // user-gesture call stack. Any await before start() breaks the gesture chain.
-    const recognition = new SR()
-    recognition.continuous = false
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognitionRef.current = recognition
-
-    recognition.onresult = e => {
-      console.log('[voice] onresult fired — speech received on this device')
-      const t = e.results[0][0].transcript.trim()
-      console.log('[voice] transcript:', JSON.stringify(t))
-      setLiveTranscript(t)
-      const match = parseVoiceLocally(t, playersRef.current)
-      if (match) {
-        logStat(match.player.id, match.statKey, match.amount)
-        setTimeout(() => setLiveTranscript(''), 1500)
-      } else {
-        setLiveTranscript("Didn't catch that…")
-        setTimeout(() => setLiveTranscript(''), 2000)
-      }
-    }
-
-    recognition.onend = () => {
-      recognitionRef.current = null
-      if (!voiceActiveRef.current) return
-      startRecognitionLoop()
-    }
-
-    recognition.onerror = e => {
-      if (e.error === 'aborted') return
-      console.error('Speech recognition error:', e.error)
-      recognitionRef.current = null
-      if (!voiceActiveRef.current) return
-      startRecognitionLoop()
-    }
-
-    voiceActiveRef.current = true
-    setPttListening(true)
-    setLiveTranscript('')
-
-    // Must be the last call — synchronous within the user gesture handler
-    try {
-      recognition.start()
-    } catch (err) {
-      console.error('Failed to start recognition:', err)
-      recognitionRef.current = null
-      voiceActiveRef.current = false
-      setPttListening(false)
-    }
-  }
-
   function startGame() {
     if (!selectedTeam) { setSetupError('Select a team.'); return }
     if (players.length === 0) { setSetupError('This team has no players yet.'); return }
@@ -428,9 +161,6 @@ export default function LiveGame() {
   }
 
   function handleEndGame() {
-    voiceActiveRef.current = false
-    recognitionRef.current?.stop()
-    setPttListening(false)
     setEnded(true)
     setTimeout(() => navigate(`/team/${selectedTeam}`), 1600)
   }
@@ -642,42 +372,7 @@ export default function LiveGame() {
           </div>
         </div>
 
-        {/* Row 2: voice toggle button */}
-        <button
-          onClick={handleVoiceToggle}
-          style={{
-            width: '100%', marginBottom: '8px',
-            padding: '24px 14px', borderRadius: '14px',
-            border: `2px solid ${pttListening ? '#16A34A' : 'var(--border)'}`,
-            background: pttListening ? 'rgba(22,163,74,0.12)' : 'var(--ground)',
-            color: pttListening ? '#16A34A' : 'var(--text)',
-            fontFamily: 'var(--font-display)',
-            fontSize: '16px', fontWeight: 700, letterSpacing: '0.12em',
-            textTransform: 'uppercase', cursor: 'pointer',
-            transition: 'border-color 0.15s, background 0.15s, color 0.15s',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-            lineHeight: 1,
-            userSelect: 'none', WebkitUserSelect: 'none',
-          }}
-        >
-          {pttListening ? (
-            <>
-              <span style={{
-                display: 'inline-block', width: '11px', height: '11px', borderRadius: '50%',
-                background: '#16A34A', flexShrink: 0,
-                animation: 'voicePulse 0.8s ease-in-out infinite',
-              }} />
-              Listening…
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: '22px', lineHeight: 1 }}>🎙</span>
-              Start Listening
-            </>
-          )}
-        </button>
-
-        {/* Row 3: live team scoreboard */}
+        {/* Row 2: live team scoreboard */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '4px' }}>
           {STATS.map(({ key, label, color }) => (
             <div key={key} style={{
@@ -700,23 +395,6 @@ export default function LiveGame() {
             </div>
           ))}
         </div>
-
-        {/* Row 4: transcript shown briefly after release */}
-        {!!liveTranscript && (
-          <div style={{
-            marginTop: '8px', padding: '8px 14px',
-            background: 'rgba(225,29,72,0.05)', borderRadius: '8px',
-            border: '1px solid rgba(225,29,72,0.18)',
-            minHeight: '32px',
-          }}>
-            <span style={{
-              fontFamily: 'var(--font-data)', fontSize: '13px',
-              color: 'var(--text)',
-            }}>
-              {liveTranscript}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Player cards */}
@@ -727,67 +405,6 @@ export default function LiveGame() {
         gap: '10px',
         maxWidth: '1280px', margin: '0 auto',
       }}>
-        {/* Voice command instructions */}
-        <div style={{ gridColumn: '1 / -1' }}>
-          <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: '10px', padding: '12px 16px',
-          }}>
-            <p style={{
-              fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
-              letterSpacing: '0.15em', textTransform: 'uppercase',
-              color: 'var(--muted)', margin: '0 0 6px',
-            }}>
-              Voice — use the player's name or jersey number
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px', marginBottom: '8px' }}>
-              {[
-                '[name] just scored',
-                'two points for [name]',
-                '[name] drove and scored',
-                '[name] got a rebound',
-                '[name] stole the ball',
-                '[name] blocked the shot',
-                '[name] dished the assist',
-              ].map(ex => (
-                <span key={ex} style={{
-                  fontFamily: 'var(--font-data)', fontSize: '11px', color: 'var(--accent)',
-                  background: 'var(--ground)', borderRadius: '5px', padding: '2px 7px',
-                  border: '1px solid var(--border)',
-                }}>
-                  "{ex}"
-                </span>
-              ))}
-            </div>
-            <p style={{
-              fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
-              letterSpacing: '0.15em', textTransform: 'uppercase',
-              color: 'var(--muted)', margin: '0 0 6px',
-            }}>
-              Or use "number [#]"
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px' }}>
-              {[
-                'number 23 scored',
-                'number 5 got a rebound',
-                'number 14 stole the ball',
-                'number 2 blocked it',
-                'number 23 with the assist',
-                'number 5 drove and scored',
-                'number 14 picked it off',
-              ].map(ex => (
-                <span key={ex} style={{
-                  fontFamily: 'var(--font-data)', fontSize: '11px', color: 'var(--accent)',
-                  background: 'var(--ground)', borderRadius: '5px', padding: '2px 7px',
-                  border: '1px solid var(--border)',
-                }}>
-                  "{ex}"
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {players.map(player => {
           const t = playerTotals[player.id] || ZERO
           const playerFlash = flash[player.id]
