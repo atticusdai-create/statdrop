@@ -285,9 +285,12 @@ export default function LiveGame() {
     setLastEntry(null)
   }
 
-  async function startPushToTalk(e) {
-    e.preventDefault()
-    if (pttListening) return
+  async function handleVoiceToggle() {
+    if (pttListening) {
+      recognitionRef.current?.stop()
+      return
+    }
+
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { alert('Voice input requires Chrome, Edge, or Safari.'); return }
 
@@ -314,7 +317,7 @@ export default function LiveGame() {
 
     recognition.onresult = e => {
       const t = e.results[0][0].transcript.trim()
-      console.log('[voice] ptt transcript:', JSON.stringify(t))
+      console.log('[voice] transcript:', JSON.stringify(t))
       setLiveTranscript(t)
       const match = parseVoiceLocally(t, playersRef.current)
       if (match) {
@@ -343,10 +346,6 @@ export default function LiveGame() {
       console.error('Failed to start recognition:', err)
       setPttListening(false)
     }
-  }
-
-  function stopPushToTalk() {
-    recognitionRef.current?.stop()
   }
 
   function startGame() {
@@ -580,40 +579,37 @@ export default function LiveGame() {
           </div>
         </div>
 
-        {/* Row 2: push-to-talk button */}
+        {/* Row 2: voice toggle button */}
         <button
-          onPointerDown={startPushToTalk}
-          onPointerUp={stopPushToTalk}
-          onPointerCancel={stopPushToTalk}
+          onClick={handleVoiceToggle}
           style={{
             width: '100%', marginBottom: '8px',
-            padding: '18px 14px', borderRadius: '12px',
-            border: `2px solid ${pttListening ? '#E11D48' : 'var(--border)'}`,
-            background: pttListening ? 'rgba(225,29,72,0.1)' : 'var(--ground)',
-            color: pttListening ? '#E11D48' : 'var(--text)',
+            padding: '24px 14px', borderRadius: '14px',
+            border: `2px solid ${pttListening ? '#16A34A' : 'var(--border)'}`,
+            background: pttListening ? 'rgba(22,163,74,0.12)' : 'var(--ground)',
+            color: pttListening ? '#16A34A' : 'var(--text)',
             fontFamily: 'var(--font-display)',
-            fontSize: '15px', fontWeight: 700, letterSpacing: '0.12em',
+            fontSize: '16px', fontWeight: 700, letterSpacing: '0.12em',
             textTransform: 'uppercase', cursor: 'pointer',
-            transition: 'border-color 0.1s, background 0.1s, color 0.1s',
+            transition: 'border-color 0.15s, background 0.15s, color 0.15s',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
             lineHeight: 1,
-            touchAction: 'none',
             userSelect: 'none', WebkitUserSelect: 'none',
           }}
         >
           {pttListening ? (
             <>
               <span style={{
-                display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
-                background: '#E11D48', flexShrink: 0,
+                display: 'inline-block', width: '11px', height: '11px', borderRadius: '50%',
+                background: '#16A34A', flexShrink: 0,
                 animation: 'voicePulse 0.8s ease-in-out infinite',
               }} />
-              Listening…
+              Listening...
             </>
           ) : (
             <>
-              <span style={{ fontSize: '20px', lineHeight: 1 }}>🎙</span>
-              Hold to Speak
+              <span style={{ fontSize: '22px', lineHeight: 1 }}>🎙</span>
+              Tap to Speak
             </>
           )}
         </button>
