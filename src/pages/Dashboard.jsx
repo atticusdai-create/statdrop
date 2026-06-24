@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseAdmin } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Dashboard() {
@@ -29,8 +29,10 @@ export default function Dashboard() {
   async function handleDeleteAccount() {
     setDeletingAccount(true)
     await supabase.from('teams').delete().eq('coach_id', user.id)
-    const { error: adminErr } = await supabase.auth.admin.deleteUser(user.id)
-    if (adminErr) {
+    if (supabaseAdmin) {
+      const { error: adminErr } = await supabaseAdmin.auth.admin.deleteUser(user.id)
+      if (adminErr) await supabase.auth.signOut()
+    } else {
       await supabase.auth.signOut()
     }
     navigate('/')
