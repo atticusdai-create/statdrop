@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import Nav from './components/Nav'
 import ProtectedRoute from './components/ProtectedRoute'
 import CoachRoute from './components/CoachRoute'
+import AddToHomeScreen from './components/AddToHomeScreen'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -22,6 +23,7 @@ function AppLayout() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100svh' }}>
       {!hideNav && <Nav />}
+      <AddToHomeScreen />
       <main style={{ flex: 1 }}>
         <Routes>
           <Route path="/" element={<Landing />} />
