@@ -21,6 +21,16 @@ function calcNetRating(s) {
   ).toFixed(2)
 }
 
+function calcAge(dob) {
+  if (!dob) return null
+  const birth = new Date(dob + 'T00:00:00')
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
+
 function fmt(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -404,6 +414,28 @@ export default function PlayerProfile() {
               borderRadius: '6px', padding: '4px 12px',
               alignSelf: 'center',
             }}>{player.position}</span>
+          )}
+          {player.height && (
+            <span style={{
+              fontFamily: 'var(--font-data)', fontSize: '14px', fontWeight: 700,
+              letterSpacing: '0.08em',
+              color: 'var(--muted)',
+              background: 'var(--ground)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px', padding: '4px 12px',
+              alignSelf: 'center',
+            }}>{player.height}</span>
+          )}
+          {player.date_of_birth && (
+            <span style={{
+              fontFamily: 'var(--font-data)', fontSize: '14px', fontWeight: 700,
+              letterSpacing: '0.08em',
+              color: 'var(--muted)',
+              background: 'var(--ground)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px', padding: '4px 12px',
+              alignSelf: 'center',
+            }}>Age {calcAge(player.date_of_birth)}</span>
           )}
         </div>
 

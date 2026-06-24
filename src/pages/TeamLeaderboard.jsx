@@ -50,7 +50,7 @@ export default function TeamLeaderboard() {
   const [sortKey, setSortKey] = useState('avg_net_rating')
   const [sortDir, setSortDir] = useState('desc')
   const [showAddPlayer, setShowAddPlayer] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', position: '', jerseyNumber: '' })
+  const [addForm, setAddForm] = useState({ name: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' })
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState('')
   const [addSuccess, setAddSuccess] = useState('')
@@ -134,12 +134,14 @@ export default function TeamLeaderboard() {
         name: addForm.name.trim(),
         position: addForm.position.trim() || null,
         jersey_number: addForm.jerseyNumber ? parseInt(addForm.jerseyNumber, 10) : null,
+        height: addForm.height.trim() || null,
+        date_of_birth: addForm.dateOfBirth || null,
         team_id: id,
       }])
     setAddLoading(false)
     if (pe) { setAddError(pe.message); return }
     setAddSuccess(`${addForm.name.trim()} added to the roster.`)
-    setAddForm({ name: '', position: '', jerseyNumber: '' })
+    setAddForm({ name: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' })
     setTimeout(() => { setAddSuccess(''); setShowAddPlayer(false) }, 1500)
   }
 
@@ -185,7 +187,7 @@ export default function TeamLeaderboard() {
             {isCoach && (
               <button
                 className="btn-ghost"
-                onClick={() => { setShowAddPlayer(true); setAddError(''); setAddSuccess(''); setAddForm({ name: '', position: '', jerseyNumber: '' }) }}
+                onClick={() => { setShowAddPlayer(true); setAddError(''); setAddSuccess(''); setAddForm({ name: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' }) }}
                 style={{ padding: '8px 18px', fontSize: '14px' }}
               >
                 + Add Player
@@ -257,6 +259,29 @@ export default function TeamLeaderboard() {
                     placeholder="e.g. 23"
                     value={addForm.jerseyNumber}
                     onChange={e => setAddForm(f => ({ ...f, jerseyNumber: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-height">Height</label>
+                  <input
+                    id="add-height"
+                    className="field"
+                    type="text"
+                    placeholder="e.g. 6'2&quot;"
+                    value={addForm.height}
+                    onChange={e => setAddForm(f => ({ ...f, height: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-date-of-birth">Date of birth</label>
+                  <input
+                    id="add-date-of-birth"
+                    className="field"
+                    type="date"
+                    min="1960-01-01"
+                    max="2015-12-31"
+                    value={addForm.dateOfBirth}
+                    onChange={e => setAddForm(f => ({ ...f, dateOfBirth: e.target.value }))}
                   />
                 </div>
                 {addError && (

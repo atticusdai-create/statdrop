@@ -13,6 +13,8 @@ export default function JoinTeam() {
   const [playerName, setPlayerName] = useState('')
   const [position, setPosition] = useState('')
   const [jerseyNumber, setJerseyNumber] = useState('')
+  const [height, setHeight] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -76,6 +78,8 @@ export default function JoinTeam() {
         name: playerName.trim(),
         position: position,
         jersey_number: parseInt(jerseyNumber, 10),
+        height: height.trim() || null,
+        date_of_birth: dateOfBirth || null,
         team_id: team.id,
         user_id: userId,
       }])
@@ -239,6 +243,31 @@ export default function JoinTeam() {
             value={jerseyNumber}
             onChange={e => setJerseyNumber(e.target.value)}
             required
+          />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="height">Height</label>
+          <input
+            id="height"
+            className="field"
+            type="text"
+            placeholder={`e.g. 6'2"`}
+            value={height}
+            onChange={e => setHeight(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="date-of-birth">Date of birth</label>
+          <input
+            id="date-of-birth"
+            className="field"
+            type="date"
+            min="1960-01-01"
+            max="2015-12-31"
+            value={dateOfBirth}
+            onChange={e => setDateOfBirth(e.target.value)}
           />
         </div>
 

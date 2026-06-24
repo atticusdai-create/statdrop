@@ -10,6 +10,81 @@ const STAT_CHARTS = [
   { key: 'blocks',   label: 'Blocks',   color: '#8B5CF6' },
 ]
 
+function prospectLevel(rating) {
+  if (rating >= 25) return 'elite'
+  if (rating >= 18) return 'high-level'
+  if (rating >= 12) return 'solid'
+  if (rating >= 7) return 'developing'
+  return 'emerging'
+}
+
+function generateScoutSummary(stats, player) {
+  if (!stats || stats.length === 0) return null
+  const n = stats.length
+  const avg = {
+    points:   stats.reduce((s, r) => s + r.points,   0) / n,
+    assists:  stats.reduce((s, r) => s + r.assists,  0) / n,
+    rebounds: stats.reduce((s, r) => s + r.rebounds, 0) / n,
+    steals:   stats.reduce((s, r) => s + r.steals,   0) / n,
+    blocks:   stats.reduce((s, r) => s + r.blocks,   0) / n,
+  }
+  const avgRating = (stats.reduce((s, r) => s + r.net_rating, 0) / n).toFixed(1)
+
+  let role, sentence1
+  if (avg.steals >= 1.5 && avg.assists >= 4) {
+    role = 'two-way playmaker'
+    sentence1 = `${player.name} is a two-way playmaker who impacts both ends of the floor, averaging ${avg.assists.toFixed(1)} assists and ${avg.steals.toFixed(1)} steals per game.`
+  } else if (avg.points >= 15) {
+    role = 'primary scorer'
+    sentence1 = `${player.name} is the team's primary scorer and offensive engine, putting up ${avg.points.toFixed(1)} points per game.`
+  } else if (avg.rebounds >= 7 && avg.blocks >= 1.5) {
+    role = 'defensive anchor'
+    sentence1 = `${player.name} anchors the defense with ${avg.rebounds.toFixed(1)} rebounds and ${avg.blocks.toFixed(1)} blocks per game — a genuine interior presence.`
+  } else if (avg.assists >= 5) {
+    role = 'playmaker'
+    sentence1 = `${player.name} is a true playmaker who orchestrates the offense, dishing out ${avg.assists.toFixed(1)} assists per game.`
+  } else if (avg.rebounds >= 8) {
+    role = 'rebounding force'
+    sentence1 = `${player.name} is a dominant rebounding force, hauling in ${avg.rebounds.toFixed(1)} boards per game.`
+  } else if (avg.blocks >= 2) {
+    role = 'shot-blocker'
+    sentence1 = `${player.name} protects the paint as a premier shot-blocker, swatting ${avg.blocks.toFixed(1)} shots per game.`
+  } else if (avg.points >= 10) {
+    role = 'scoring threat'
+    sentence1 = `${player.name} is a reliable scoring threat, contributing ${avg.points.toFixed(1)} points per game.`
+  } else {
+    role = 'versatile contributor'
+    sentence1 = `${player.name} is a versatile contributor who brings effort and energy across multiple areas of the game.`
+  }
+
+  const extras = []
+  if (!['primary scorer', 'scoring threat'].includes(role) && avg.points >= 10) extras.push(`${avg.points.toFixed(1)} ppg`)
+  if (!['two-way playmaker', 'playmaker'].includes(role) && avg.assists >= 3) extras.push(`${avg.assists.toFixed(1)} apg`)
+  if (!['rebounding force', 'defensive anchor'].includes(role) && avg.rebounds >= 5) extras.push(`${avg.rebounds.toFixed(1)} rpg`)
+  if (role !== 'two-way playmaker' && avg.steals >= 1) extras.push(`${avg.steals.toFixed(1)} spg`)
+  if (!['shot-blocker', 'defensive anchor'].includes(role) && avg.blocks >= 1) extras.push(`${avg.blocks.toFixed(1)} bpg`)
+
+  const sentence2 = extras.length >= 2
+    ? `The full stat line rounds out the picture: ${extras.slice(0, 3).join(', ')}.`
+    : extras.length === 1
+      ? `The stat sheet also shows ${extras[0]} as a consistent secondary contribution.`
+      : ''
+
+  const sentence3 = `Carrying a StatDrop Rating of ${avgRating} across ${n} game${n !== 1 ? 's' : ''}, ${player.name} is a ${prospectLevel(parseFloat(avgRating))} prospect worth tracking.`
+
+  return [sentence1, sentence2, sentence3].filter(Boolean).join(' ')
+}
+
+function calcAge(dob) {
+  if (!dob) return null
+  const birth = new Date(dob + 'T00:00:00')
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
+
 function calcNetRating(s) {
   return +(
     ((s.points || 0) * 1) +
@@ -135,6 +210,7 @@ export default function PublicPlayerProfile() {
   )
 
   const n = stats.length
+  const scoutSummary = generateScoutSummary(stats, player)
   const totals = {
     points:   stats.reduce((s, r) => s + r.points,   0),
     assists:  stats.reduce((s, r) => s + r.assists,  0),
@@ -218,6 +294,24 @@ export default function PublicPlayerProfile() {
                 borderRadius: '6px', padding: '5px 14px',
               }}>{player.position}</span>
             )}
+            {player.height && (
+              <span style={{
+                fontFamily: 'var(--font-data)', fontSize: '13px', fontWeight: 700,
+                color: 'rgba(255,255,255,0.55)',
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.13)',
+                borderRadius: '6px', padding: '5px 14px',
+              }}>{player.height}</span>
+            )}
+            {player.date_of_birth && (
+              <span style={{
+                fontFamily: 'var(--font-data)', fontSize: '13px', fontWeight: 700,
+                color: 'rgba(255,255,255,0.55)',
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.13)',
+                borderRadius: '6px', padding: '5px 14px',
+              }}>Age {calcAge(player.date_of_birth)}</span>
+            )}
           </div>
 
           {/* StatDrop Rating — hero stat */}
@@ -265,6 +359,38 @@ export default function PublicPlayerProfile() {
 
         {n > 0 ? (
           <>
+            {/* Scout Summary */}
+            {scoutSummary && (
+              <div style={{
+                background: 'linear-gradient(135deg, #0f1c35 0%, #0a1628 100%)',
+                border: '1px solid rgba(96, 165, 250, 0.2)',
+                borderRadius: '16px',
+                padding: '28px 32px',
+                marginBottom: '24px',
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+                {/* accent bar */}
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0,
+                  width: '4px',
+                  background: 'linear-gradient(180deg, #1A5CFF 0%, #60a5fa 100%)',
+                  borderRadius: '4px 0 0 4px',
+                }} />
+                <p style={{
+                  fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
+                  letterSpacing: '0.28em', textTransform: 'uppercase',
+                  color: '#60a5fa', margin: '0 0 14px',
+                }}>Scout Summary</p>
+                <p style={{
+                  fontFamily: 'Georgia, "Times New Roman", serif',
+                  fontSize: '15px', lineHeight: '1.75',
+                  color: 'rgba(255,255,255,0.82)',
+                  margin: 0, fontStyle: 'italic',
+                }}>{scoutSummary}</p>
+              </div>
+            )}
+
             {/* Totals + Per Game */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginBottom: '28px' }}>
 
