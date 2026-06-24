@@ -5,7 +5,8 @@
       "Bash(npm run *)",
       "Bash(npx playwright *)",
       "Skill(claude-api)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npx vite *)"
     ]
   }
 }

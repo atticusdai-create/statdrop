@@ -308,6 +308,15 @@ export default function PlayerProfile() {
   const [stats, setStats] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  function shareProfile() {
+    const url = `${window.location.origin}/public/player/${id}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   useEffect(() => {
     async function load() {
@@ -398,8 +407,23 @@ export default function PlayerProfile() {
           )}
         </div>
 
-        {/* Quick summary chips */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {/* Share + quick summary chips */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={shareProfile}
+            style={{
+              fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 700,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              color: copied ? '#10B981' : 'var(--accent)',
+              background: copied ? 'rgba(16,185,129,0.08)' : 'var(--accent-dim)',
+              border: `1px solid ${copied ? 'rgba(16,185,129,0.3)' : 'rgba(26,92,255,0.25)'}`,
+              borderRadius: '8px', padding: '8px 16px',
+              cursor: 'pointer', transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {copied ? '✓ Link copied!' : '↗ Share Profile'}
+          </button>
           {[
             { label: 'Games', val: totals.games },
             { label: 'Total PTS', val: totals.points },
