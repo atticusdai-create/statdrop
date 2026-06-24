@@ -13,7 +13,7 @@ const COLS = [
   { key: 'rebounds',        label: 'REB',     desc: 'Total rebounds' },
   { key: 'steals',          label: 'STL',     desc: 'Total steals' },
   { key: 'blocks',          label: 'BLK',     desc: 'Total blocks' },
-  { key: 'avg_net_rating',  label: 'Avg Net Rtg', desc: 'Average net rating per game' },
+  { key: 'avg_net_rating',  label: 'Avg StatDrop Rtg', desc: 'Average StatDrop rating per game' },
   { key: 'games',           label: 'GP',      desc: 'Games played' },
 ]
 
@@ -395,7 +395,7 @@ export default function TeamLeaderboard() {
                 fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700,
                 letterSpacing: '-0.01em', textTransform: 'uppercase',
                 color: 'var(--text)', margin: '0 0 4px',
-              }}>Net Rating Rankings</h2>
+              }}>StatDrop Rating Rankings</h2>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--muted)' }}>
                 [(PTS × 1) + (AST × 1.5) + (REB × 1.2) + (STL × 2) + (BLK × 2)] ÷ games played
               </p>

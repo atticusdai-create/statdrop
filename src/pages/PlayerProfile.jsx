@@ -8,7 +8,7 @@ const STAT_CHARTS = [
   { key: 'rebounds',        label: 'Rebounds',        color: '#06B6D4' },
   { key: 'steals',          label: 'Steals',          color: '#10B981' },
   { key: 'blocks',          label: 'Blocks',          color: '#8B5CF6' },
-  { key: 'net_rating',      label: 'Net Rating',      color: '#E11D48' },
+  { key: 'net_rating',      label: 'StatDrop Rating',      color: '#E11D48' },
 ]
 
 function calcNetRating(s) {
@@ -108,25 +108,25 @@ function generateOverview(stats, playerName) {
     const delta = lateAvg - earlyAvg
     if (delta > 2.5) {
       trend = 'improving'; trendLabel = 'Improving'; trendColor = '#10B981'
-      trendLine = `Net rating has climbed noticeably (+${delta.toFixed(1)} in recent games) — ${playerName} is hitting their stride`
+      trendLine = `StatDrop rating has climbed noticeably (+${delta.toFixed(1)} in recent games) — ${playerName} is hitting their stride`
     } else if (delta < -2.5) {
       trend = 'declining'; trendLabel = 'Declining'; trendColor = '#EF4444'
-      trendLine = `Net rating has dipped recently (${delta.toFixed(1)} vs earlier games) — worth addressing in practice`
+      trendLine = `StatDrop rating has dipped recently (${delta.toFixed(1)} vs earlier games) — worth addressing in practice`
     } else {
       trend = 'consistent'; trendLabel = 'Consistent'; trendColor = '#F59E0B'
-      trendLine = `Performance has been steady across the sample (avg net rating: ${avg.netRating.toFixed(1)})`
+      trendLine = `Performance has been steady across the sample (avg StatDrop rating: ${avg.netRating.toFixed(1)})`
     }
   } else if (n >= 2) {
     const delta = stats[n - 1].net_rating - stats[0].net_rating
     if (delta > 2) {
       trend = 'improving'; trendLabel = 'Improving'; trendColor = '#10B981'
-      trendLine = `Net rating trended up from ${stats[0].net_rating} to ${stats[n - 1].net_rating}`
+      trendLine = `StatDrop rating trended up from ${stats[0].net_rating} to ${stats[n - 1].net_rating}`
     } else if (delta < -2) {
       trend = 'declining'; trendLabel = 'Declining'; trendColor = '#EF4444'
-      trendLine = `Net rating slipped from ${stats[0].net_rating} to ${stats[n - 1].net_rating}`
+      trendLine = `StatDrop rating slipped from ${stats[0].net_rating} to ${stats[n - 1].net_rating}`
     } else {
       trend = 'consistent'; trendLabel = 'Consistent'; trendColor = '#F59E0B'
-      trendLine = `Numbers have held steady so far (avg net rating: ${avg.netRating.toFixed(1)})`
+      trendLine = `Numbers have held steady so far (avg StatDrop rating: ${avg.netRating.toFixed(1)})`
     }
   } else {
     trend = 'consistent'; trendLabel = 'Early Data'; trendColor = '#64748B'
@@ -404,7 +404,7 @@ export default function PlayerProfile() {
             { label: 'Games', val: totals.games },
             { label: 'Total PTS', val: totals.points },
             { label: 'Total AST', val: totals.assists },
-            { label: 'Avg Net Rating per Game', val: totals.avgNetRating, highlight: true },
+            { label: 'Avg StatDrop Rating per Game', val: totals.avgNetRating, highlight: true },
           ].map(({ label, val, highlight }) => (
             <div key={label} style={{
               background: highlight ? 'rgba(225, 29, 72, 0.06)' : 'var(--surface)',
