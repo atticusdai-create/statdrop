@@ -21,8 +21,6 @@ export default function StatLog() {
   const [form, setForm] = useState({
     team_id: preselectedTeam,
     player_id: '',
-    new_player_name: '',
-    mode: 'existing',
     game_date: today(),
     points: '',
     assists: '',
@@ -56,21 +54,10 @@ export default function StatLog() {
     e.preventDefault()
     setError('')
     if (!form.team_id) { setError('Select a team.'); return }
-    if (form.mode === 'existing' && !form.player_id) { setError('Select a player.'); return }
-    if (form.mode === 'new' && !form.new_player_name.trim()) { setError('Enter a player name.'); return }
+    if (!form.player_id) { setError('Select a player.'); return }
 
     setLoading(true)
-    let playerId = form.player_id
-
-    if (form.mode === 'new') {
-      const { data, error: pe } = await supabase
-        .from('players')
-        .insert([{ name: form.new_player_name.trim(), team_id: form.team_id }])
-        .select()
-        .single()
-      if (pe) { setError(pe.message); setLoading(false); return }
-      playerId = data.id
-    }
+    const playerId = form.player_id
 
     const { error: se } = await supabase.from('game_stats').insert([{
       player_id:       playerId,
@@ -157,40 +144,11 @@ export default function StatLog() {
         {/* Player */}
         {form.team_id && (
           <div>
-            <label className="label">Player</label>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-              {['existing', 'new'].map(m => (
-                <button key={m} type="button"
-                  onClick={() => set('mode', m)}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '6px',
-                    border: '1.5px solid',
-                    borderColor: form.mode === m ? 'var(--accent)' : 'var(--border)',
-                    background: form.mode === m ? 'var(--accent-dim)' : 'transparent',
-                    color: form.mode === m ? 'var(--accent)' : 'var(--muted)',
-                    fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {m === 'existing' ? 'Existing player' : 'New player'}
-                </button>
-              ))}
-            </div>
-            {form.mode === 'existing' ? (
-              <select className="field" value={form.player_id} onChange={e => set('player_id', e.target.value)}>
-                <option value="">Select a player</option>
-                {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            ) : (
-              <input
-                className="field"
-                type="text"
-                placeholder="Player name"
-                value={form.new_player_name}
-                onChange={e => set('new_player_name', e.target.value)}
-              />
-            )}
+            <label className="label" htmlFor="player">Player</label>
+            <select id="player" className="field" value={form.player_id} onChange={e => set('player_id', e.target.value)}>
+              <option value="">Select a player</option>
+              {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
         )}
 

@@ -49,13 +49,18 @@ export default function TeamLeaderboard() {
   const [error, setError] = useState('')
   const [sortKey, setSortKey] = useState('avg_net_rating')
   const [sortDir, setSortDir] = useState('desc')
+  const [showAddPlayer, setShowAddPlayer] = useState(false)
+  const [addForm, setAddForm] = useState({ name: '', position: '' })
+  const [addLoading, setAddLoading] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [addSuccess, setAddSuccess] = useState('')
 
   useEffect(() => {
     async function load() {
       setLoading(true)
       const [{ data: teamData, error: teamErr }, { data: stats, error: statsErr }] = await Promise.all([
         supabase.from('teams').select('*').eq('id', id).single(),
-        supabase.from('game_stats').select('*, players(name)').eq('team_id', id),
+        supabase.from('game_stats').select('*, players(name, position)').eq('team_id', id),
       ])
       if (teamErr || !teamData) { setError('Team not found.'); setLoading(false); return }
       if (statsErr) { setError(statsErr.message); setLoading(false); return }
@@ -64,16 +69,17 @@ export default function TeamLeaderboard() {
       const byPlayer = {}
       for (const s of (stats || [])) {
         const pid = s.player_id
-        if (!byPlayer[pid]) byPlayer[pid] = { playerId: pid, name: s.players?.name || 'Unknown', records: [] }
+        if (!byPlayer[pid]) byPlayer[pid] = { playerId: pid, name: s.players?.name || 'Unknown', position: s.players?.position || '', records: [] }
         byPlayer[pid].records.push(s)
       }
 
-      const compiled = Object.values(byPlayer).map(({ playerId, name, records }) => {
+      const compiled = Object.values(byPlayer).map(({ playerId, name, position, records }) => {
         const games = records.length
         const netSum = records.reduce((s, r) => s + calcNetRatingForRow(r), 0)
         return {
           playerId,
           name,
+          position,
           games,
           points:          sumStat(records, 'points'),
           assists:         sumStat(records, 'assists'),
@@ -116,6 +122,21 @@ export default function TeamLeaderboard() {
     else { setSortKey(key); setSortDir('desc') }
   }
 
+  async function handleAddPlayer(e) {
+    e.preventDefault()
+    setAddError('')
+    if (!addForm.name.trim()) { setAddError('Player name is required.'); return }
+    setAddLoading(true)
+    const { error: pe } = await supabase
+      .from('players')
+      .insert([{ name: addForm.name.trim(), position: addForm.position.trim() || null, team_id: id }])
+    setAddLoading(false)
+    if (pe) { setAddError(pe.message); return }
+    setAddSuccess(`${addForm.name.trim()} added to the roster.`)
+    setAddForm({ name: '', position: '' })
+    setTimeout(() => { setAddSuccess(''); setShowAddPlayer(false) }, 1500)
+  }
+
   if (loading) return <LoadState />
   if (error)   return <ErrState msg={error} />
 
@@ -148,15 +169,21 @@ export default function TeamLeaderboard() {
               </span>
             )}
             {isCoach && (
-              <Link to={`/live?team=${id}`} style={{
+              <Link to={`/live?team=${id}`} className="btn-primary" style={{
                 padding: '8px 18px', fontSize: '14px',
-                borderRadius: '8px', border: '1.5px solid #E11D48',
-                color: '#E11D48', background: 'rgba(225,29,72,0.06)',
-                fontFamily: 'var(--font-body)', fontWeight: 600,
                 textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px',
               }}>
                 Track Stats Live
               </Link>
+            )}
+            {isCoach && (
+              <button
+                className="btn-ghost"
+                onClick={() => { setShowAddPlayer(true); setAddError(''); setAddSuccess(''); setAddForm({ name: '', position: '' }) }}
+                style={{ padding: '8px 18px', fontSize: '14px' }}
+              >
+                + Add Player
+              </button>
             )}
             {isCoach && (
               <Link to={`/log?team=${id}`} className="btn-primary" style={{ padding: '8px 18px', fontSize: '14px' }}>
@@ -166,6 +193,69 @@ export default function TeamLeaderboard() {
           </div>
         </div>
       </div>
+
+      {/* Add Player Modal */}
+      {showAddPlayer && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px',
+        }} onClick={e => { if (e.target === e.currentTarget) setShowAddPlayer(false) }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <h2 style={{
+              fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 800,
+              letterSpacing: '-0.01em', textTransform: 'uppercase',
+              color: 'var(--text)', margin: '0 0 24px',
+            }}>Add Player</h2>
+            {addSuccess ? (
+              <p style={{ color: '#10B981', fontFamily: 'var(--font-data)', fontSize: '14px', margin: 0 }}>{addSuccess}</p>
+            ) : (
+              <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label className="label" htmlFor="add-name">Name</label>
+                  <input
+                    id="add-name"
+                    className="field"
+                    type="text"
+                    placeholder="Player name"
+                    value={addForm.name}
+                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-position">Position</label>
+                  <select
+                    id="add-position"
+                    className="field"
+                    value={addForm.position}
+                    onChange={e => setAddForm(f => ({ ...f, position: e.target.value }))}
+                  >
+                    <option value="">Select position</option>
+                    <option value="PG">PG – Point Guard</option>
+                    <option value="SG">SG – Shooting Guard</option>
+                    <option value="SF">SF – Small Forward</option>
+                    <option value="PF">PF – Power Forward</option>
+                    <option value="C">C – Center</option>
+                  </select>
+                </div>
+                {addError && (
+                  <p style={{ color: '#E53E3E', fontSize: '13px', margin: 0 }}>{addError}</p>
+                )}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                  <button type="submit" className="btn-primary" disabled={addLoading} style={{ flex: 1 }}>
+                    {addLoading ? 'Adding…' : 'Add Player'}
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => setShowAddPlayer(false)} style={{ flex: 1 }}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState teamId={id} isCoach={isCoach} />
@@ -225,6 +315,17 @@ export default function TeamLeaderboard() {
                           <span style={{ fontWeight: 500, color: 'var(--text)', fontSize: '15px' }}>
                             {row.name}
                           </span>
+                          {row.position && (
+                            <span style={{
+                              fontFamily: 'var(--font-data)', fontSize: '10px', fontWeight: 700,
+                              letterSpacing: '0.08em', textTransform: 'uppercase',
+                              color: 'var(--muted)',
+                              background: 'var(--ground)',
+                              border: '1px solid var(--border)',
+                              borderRadius: '4px', padding: '2px 6px',
+                              flexShrink: 0,
+                            }}>{row.position}</span>
+                          )}
                         </div>
                       </td>
                       {COLS.map(col => (

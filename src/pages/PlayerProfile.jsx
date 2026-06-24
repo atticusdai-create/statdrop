@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
 import { supabase } from '../lib/supabase'
 
 const STAT_CHARTS = [
@@ -30,33 +26,210 @@ function fmt(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function CustomTooltip({ active, payload, label, unit, statKey }) {
-  console.log('[CustomTooltip] active:', active, 'payload:', payload, 'label:', label)
-  if (!active || !payload?.length) return null
-  // payload[0].payload is always the raw data object; use statKey to read the real value
-  const value = statKey
-    ? (payload[0].payload?.[statKey] ?? payload[0].value)
-    : payload[0].value
+function generateOverview(stats, playerName) {
+  if (!stats || stats.length === 0) return null
+
+  const n = stats.length
+  const avg = {
+    points:    stats.reduce((s, r) => s + r.points,    0) / n,
+    assists:   stats.reduce((s, r) => s + r.assists,   0) / n,
+    rebounds:  stats.reduce((s, r) => s + r.rebounds,  0) / n,
+    steals:    stats.reduce((s, r) => s + r.steals,    0) / n,
+    blocks:    stats.reduce((s, r) => s + r.blocks,    0) / n,
+    netRating: stats.reduce((s, r) => s + r.net_rating, 0) / n,
+  }
+  const defAvg = avg.steals + avg.blocks
+
+  // Role
+  let role, roleDesc
+  if (avg.points >= 18) {
+    role = 'Primary Scorer'
+    roleDesc = `a go-to offensive option averaging ${avg.points.toFixed(1)} points per game`
+  } else if (avg.assists >= 6) {
+    role = 'Playmaker'
+    roleDesc = `the team's primary distributor with ${avg.assists.toFixed(1)} assists per game`
+  } else if (avg.rebounds >= 8) {
+    role = 'Rebounder'
+    roleDesc = `a dominant presence on the glass, hauling in ${avg.rebounds.toFixed(1)} boards per game`
+  } else if (defAvg >= 3) {
+    role = 'Defensive Specialist'
+    roleDesc = `a defensive anchor combining ${avg.steals.toFixed(1)} steals and ${avg.blocks.toFixed(1)} blocks per game`
+  } else if (avg.points >= 12) {
+    role = 'Secondary Scorer'
+    roleDesc = `a reliable offensive contributor averaging ${avg.points.toFixed(1)} points per game`
+  } else if (avg.assists >= 4) {
+    role = 'Playmaker'
+    roleDesc = `a facilitator who creates for others with ${avg.assists.toFixed(1)} assists per game`
+  } else if (avg.rebounds >= 5) {
+    role = 'Rebounder'
+    roleDesc = `a solid rebounder averaging ${avg.rebounds.toFixed(1)} boards per game`
+  } else {
+    role = 'Role Player'
+    roleDesc = `a versatile contributor who fills in where the team needs it`
+  }
+
+  // Strengths & weaknesses
+  const statList = [
+    { label: 'scoring',           val: avg.points,   unit: 'ppg', hi: 12 },
+    { label: 'playmaking',        val: avg.assists,  unit: 'apg', hi: 4  },
+    { label: 'rebounding',        val: avg.rebounds, unit: 'rpg', hi: 6  },
+    { label: 'perimeter defense', val: avg.steals,   unit: 'spg', hi: 1.5 },
+    { label: 'shot-blocking',     val: avg.blocks,   unit: 'bpg', hi: 1.5 },
+  ]
+  const strong = statList.filter(s => s.val >= s.hi)
+  const weak   = statList.filter(s => s.val < s.hi * 0.4).sort((a, b) => (a.val / a.hi) - (b.val / b.hi))
+
+  let strengthLine
+  if (strong.length === 0) {
+    strengthLine = `${playerName} hasn't yet posted standout numbers in any single category`
+  } else if (strong.length === 1) {
+    strengthLine = `The clearest strength is ${strong[0].label} (${strong[0].val.toFixed(1)} ${strong[0].unit})`
+  } else {
+    const parts = strong.map(s => `${s.label} (${s.val.toFixed(1)} ${s.unit})`)
+    const last = parts.pop()
+    strengthLine = `${playerName} stands out in ${parts.join(', ')} and ${last}`
+  }
+
+  let improveLine
+  if (weak.length === 0) {
+    improveLine = `and brings a respectable floor across all areas`
+  } else if (weak.length === 1) {
+    improveLine = `though ${weak[0].label} (${weak[0].val.toFixed(1)} ${weak[0].unit}) is the biggest area for growth`
+  } else {
+    improveLine = `though ${weak.map(w => w.label).join(' and ')} could both be elevated`
+  }
+
+  // Net rating trend
+  let trend, trendLabel, trendColor, trendLine
+  if (n >= 4) {
+    const mid = Math.ceil(n / 2)
+    const earlyAvg = stats.slice(0, mid).reduce((s, r) => s + r.net_rating, 0) / mid
+    const lateAvg  = stats.slice(mid).reduce((s, r) => s + r.net_rating, 0) / (n - mid)
+    const delta = lateAvg - earlyAvg
+    if (delta > 2.5) {
+      trend = 'improving'; trendLabel = 'Improving'; trendColor = '#10B981'
+      trendLine = `Net rating has climbed noticeably (+${delta.toFixed(1)} in recent games) — ${playerName} is hitting their stride`
+    } else if (delta < -2.5) {
+      trend = 'declining'; trendLabel = 'Declining'; trendColor = '#EF4444'
+      trendLine = `Net rating has dipped recently (${delta.toFixed(1)} vs earlier games) — worth addressing in practice`
+    } else {
+      trend = 'consistent'; trendLabel = 'Consistent'; trendColor = '#F59E0B'
+      trendLine = `Performance has been steady across the sample (avg net rating: ${avg.netRating.toFixed(1)})`
+    }
+  } else if (n >= 2) {
+    const delta = stats[n - 1].net_rating - stats[0].net_rating
+    if (delta > 2) {
+      trend = 'improving'; trendLabel = 'Improving'; trendColor = '#10B981'
+      trendLine = `Net rating trended up from ${stats[0].net_rating} to ${stats[n - 1].net_rating}`
+    } else if (delta < -2) {
+      trend = 'declining'; trendLabel = 'Declining'; trendColor = '#EF4444'
+      trendLine = `Net rating slipped from ${stats[0].net_rating} to ${stats[n - 1].net_rating}`
+    } else {
+      trend = 'consistent'; trendLabel = 'Consistent'; trendColor = '#F59E0B'
+      trendLine = `Numbers have held steady so far (avg net rating: ${avg.netRating.toFixed(1)})`
+    }
+  } else {
+    trend = 'consistent'; trendLabel = 'Early Data'; trendColor = '#64748B'
+    trendLine = `Only one game logged — check back after a few more games for trend data`
+  }
+
+  // Coach recommendation
+  let recRole, recDetail
+  if (avg.netRating >= 22) {
+    recRole = 'Start'
+    recDetail = `${playerName}'s all-around impact makes them a cornerstone of the lineup — lock them in as a starter.`
+  } else if (avg.netRating >= 16) {
+    recRole = 'Starter'
+    recDetail = `${playerName} earns a starting spot. Give them a defined role as ${role.toLowerCase()} and let them run with it.`
+  } else if (avg.netRating >= 10) {
+    if (defAvg >= 2.5) {
+      recRole = 'Defensive Specialist'
+      recDetail = `Bring ${playerName} off the bench in high-leverage moments — their defensive instincts change the energy of a possession.`
+    } else {
+      recRole = 'Key Bench Player'
+      recDetail = `${playerName} is a quality reserve. Slot them into favorable matchups and let their ${role.toLowerCase()} skills spark runs.`
+    }
+  } else {
+    recRole = 'Development Role'
+    recDetail = `${playerName} is still finding their footing. Controlled minutes in low-pressure situations will accelerate their growth.`
+  }
+
+  return {
+    role, trend, trendLabel, trendColor, avg,
+    paragraph: `${playerName} is ${roleDesc}. ${strengthLine}, ${improveLine}. ${trendLine}.`,
+    recRole, recDetail,
+  }
+}
+
+function PlayerOverview({ stats, playerName }) {
+  const ov = generateOverview(stats, playerName)
+  if (!ov) return null
+
   return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: '8px', padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-    }}>
-      <p style={{ margin: '0 0 4px', fontSize: '12px', color: 'var(--muted)' }}>{fmt(label)}</p>
-      <p style={{ margin: 0, fontFamily: 'var(--font-data)', fontSize: '18px', fontWeight: 700, color: payload[0].color }}>
-        {value}{unit}
-      </p>
+    <div className="card" style={{ padding: '28px 32px', marginBottom: '32px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <p style={{
+            fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600,
+            letterSpacing: '0.18em', textTransform: 'uppercase',
+            color: 'var(--muted)', margin: 0,
+          }}>Player Overview</p>
+          <span style={{
+            fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
+            letterSpacing: '0.1em', textTransform: 'uppercase',
+            background: 'rgba(26, 92, 255, 0.1)', color: '#1A5CFF',
+            border: '1px solid rgba(26, 92, 255, 0.22)',
+            borderRadius: '6px', padding: '3px 10px',
+          }}>{ov.role}</span>
+        </div>
+        <span style={{
+          fontFamily: 'var(--font-data)', fontSize: '11px', fontWeight: 600,
+          letterSpacing: '0.05em',
+          color: ov.trendColor,
+          background: `${ov.trendColor}18`,
+          border: `1px solid ${ov.trendColor}44`,
+          borderRadius: '6px', padding: '3px 10px',
+        }}>
+          {ov.trend === 'improving' ? '↑ ' : ov.trend === 'declining' ? '↓ ' : '→ '}
+          {ov.trendLabel}
+        </span>
+      </div>
+
+      {/* Summary paragraph */}
+      <p style={{
+        fontFamily: 'var(--font-body)', fontSize: '14px', lineHeight: '1.8',
+        color: 'var(--text)', margin: '0 0 22px',
+      }}>{ov.paragraph}</p>
+
+      {/* Coach's call */}
+      <div style={{
+        borderTop: '1px solid var(--border)', paddingTop: '18px',
+        display: 'flex', gap: '12px', alignItems: 'flex-start',
+      }}>
+        <span style={{
+          flexShrink: 0,
+          fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
+          letterSpacing: '0.12em', textTransform: 'uppercase',
+          background: 'rgba(225, 29, 72, 0.08)', color: '#E11D48',
+          border: '1px solid rgba(225, 29, 72, 0.2)',
+          borderRadius: '6px', padding: '4px 10px',
+          whiteSpace: 'nowrap', marginTop: '2px',
+        }}>{ov.recRole}</span>
+        <p style={{
+          fontFamily: 'var(--font-body)', fontSize: '13px',
+          color: 'var(--muted)', lineHeight: '1.65', margin: 0,
+        }}>{ov.recDetail}</p>
+      </div>
     </div>
   )
 }
 
 function StatChart({ data, statKey, label, color }) {
-  console.log('[StatChart]', label, 'keys:', data.length ? Object.keys(data[0]) : [], 'data:', data)
   const values = data.map(d => d[statKey])
   const max = Math.max(...values, 1)
   const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) : '—'
   const last = values.length ? values[values.length - 1] : '—'
-  const unit = ''
   const trend = values.length >= 2 ? (values[values.length - 1] - values[values.length - 2]) : 0
 
   return (
@@ -69,9 +242,7 @@ function StatChart({ data, statKey, label, color }) {
             color: 'var(--muted)', margin: '0 0 4px',
           }}>{label}</p>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{
-              fontFamily: 'var(--font-data)', fontSize: '28px', fontWeight: 700, color,
-            }}>{last}{unit}</span>
+            <span style={{ fontFamily: 'var(--font-data)', fontSize: '28px', fontWeight: 700, color }}>{last}</span>
             {values.length >= 2 && (
               <span style={{
                 fontFamily: 'var(--font-data)', fontSize: '12px',
@@ -84,44 +255,46 @@ function StatChart({ data, statKey, label, color }) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <p style={{ margin: '0 0 2px', fontSize: '11px', color: 'var(--muted)' }}>avg</p>
-          <span style={{ fontFamily: 'var(--font-data)', fontSize: '16px', color: 'var(--text)' }}>
-            {avg}{unit}
-          </span>
+          <span style={{ fontFamily: 'var(--font-data)', fontSize: '16px', color: 'var(--text)' }}>{avg}</span>
         </div>
       </div>
 
-      {data.length >= 2 ? (
-        <ResponsiveContainer width="100%" height={120}>
-          <LineChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis
-              dataKey="game_date"
-              tickFormatter={fmt}
-              tick={{ fill: 'var(--muted)', fontSize: 10, fontFamily: 'var(--font-body)' }}
-              axisLine={false} tickLine={false}
-            />
-            <YAxis
-              domain={[0, Math.ceil(max * 1.2)]}
-              tick={{ fill: 'var(--muted)', fontSize: 10, fontFamily: 'var(--font-body)' }}
-              axisLine={false} tickLine={false}
-            />
-            <Tooltip content={(props) => <CustomTooltip {...props} unit={unit} statKey={statKey} />} />
-            <Line
-              type="monotone"
-              dataKey={statKey}
-              stroke={color}
-              strokeWidth={2.5}
-              dot={{ r: 4, fill: color, strokeWidth: 0 }}
-              activeDot={{ r: 6, fill: color, strokeWidth: 2, stroke: 'var(--surface)' }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      {data.length >= 1 ? (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '120px' }}>
+          {data.map((d, i) => {
+            const val = d[statKey]
+            const barPct = max > 0 ? Math.max((val / max) * 80, val > 0 ? 2 : 0) : 0
+            return (
+              <div key={d.id || i} style={{ flex: 1, position: 'relative', height: '100%' }}>
+                <span style={{
+                  position: 'absolute',
+                  bottom: `calc(${barPct}% + 4px)`,
+                  left: 0, right: 0,
+                  textAlign: 'center',
+                  fontSize: '9px',
+                  fontFamily: 'var(--font-data)',
+                  color: 'var(--muted)',
+                  lineHeight: 1,
+                }}>{val}</span>
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0, left: 0, right: 0,
+                  height: `${barPct}%`,
+                  background: color,
+                  borderRadius: '3px 3px 0 0',
+                  minHeight: val > 0 ? '3px' : '0',
+                  opacity: 0.85,
+                }} />
+              </div>
+            )
+          })}
+        </div>
       ) : (
         <div style={{
           height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: 'var(--muted)', fontSize: '13px',
         }}>
-          Log at least 2 games to see the trend
+          No games logged yet
         </div>
       )}
     </div>
@@ -193,13 +366,26 @@ export default function PlayerProfile() {
             ← {team.name}
           </Link>
         )}
-        <h1 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(40px, 8vw, 72px)',
-          fontWeight: 800, lineHeight: 0.92,
-          letterSpacing: '-0.02em', textTransform: 'uppercase',
-          color: 'var(--text)', margin: '0 0 28px',
-        }}>{player.name}</h1>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', flexWrap: 'wrap', margin: '0 0 28px' }}>
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(40px, 8vw, 72px)',
+            fontWeight: 800, lineHeight: 0.92,
+            letterSpacing: '-0.02em', textTransform: 'uppercase',
+            color: 'var(--text)', margin: 0,
+          }}>{player.name}</h1>
+          {player.position && (
+            <span style={{
+              fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 700,
+              letterSpacing: '0.15em', textTransform: 'uppercase',
+              color: 'var(--accent)',
+              background: 'var(--accent-dim)',
+              border: '1px solid rgba(var(--accent-rgb, 26, 92, 255), 0.25)',
+              borderRadius: '6px', padding: '4px 12px',
+              alignSelf: 'center',
+            }}>{player.position}</span>
+          )}
+        </div>
 
         {/* Quick summary chips */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -227,17 +413,20 @@ export default function PlayerProfile() {
           <Link to={`/log?team=${team?.id}`} className="btn-primary">Log First Game</Link>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
-          {STAT_CHARTS.map(({ key, label, color }) => (
-            <StatChart
-              key={key}
-              data={stats}
-              statKey={key}
-              label={label}
-              color={color}
-            />
-          ))}
-        </div>
+        <>
+          <PlayerOverview stats={stats} playerName={player.name} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
+            {STAT_CHARTS.map(({ key, label, color }) => (
+              <StatChart
+                key={key}
+                data={stats}
+                statKey={key}
+                label={label}
+                color={color}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Game log table */}
@@ -263,8 +452,8 @@ export default function PlayerProfile() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...stats].reverse().map((row, i) => (
-                    <tr key={row.id} style={{ borderBottom: i < stats.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  {[...stats].reverse().map((row, i, arr) => (
+                    <tr key={row.id} style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
                       <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--muted)', fontFamily: 'var(--font-data)' }}>
                         {fmt(row.game_date)}
                       </td>

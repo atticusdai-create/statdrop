@@ -15,15 +15,75 @@ const STATS = [
 
 const ZERO = { points: 0, assists: 0, rebounds: 0, steals: 0, blocks: 0 }
 
-const STAT_ALIASES = {
-  point: 'points', points: 'points', pts: 'points', score: 'points', scored: 'points',
-  assist: 'assists', assists: 'assists', ast: 'assists',
-  rebound: 'rebounds', rebounds: 'rebounds', reb: 'rebounds', board: 'rebounds', boards: 'rebounds',
-  steal: 'steals', steals: 'steals', stl: 'steals', stole: 'steals',
-  block: 'blocks', blocks: 'blocks', blk: 'blocks', blocked: 'blocks',
+function levenshtein(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 99
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0)
+  )
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+  return dp[m][n]
 }
 
-const NUMBER_WORDS = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10 }
+const STAT_KEYWORDS = [
+  { key: 'blocks',   words: ['block', 'blocked', 'blocks', 'reject', 'rejected', 'rejection', 'swat', 'swatted'] },
+  { key: 'steals',   words: ['steal', 'stole', 'steals', 'stolen', 'rip', 'ripped', 'stripped', 'picked off', 'took it'] },
+  { key: 'rebounds', words: ['rebound', 'rebounded', 'rebounds', 'board', 'boards', 'glass', 'grabbed'] },
+  { key: 'assists',  words: ['assist', 'assisted', 'assists', 'pass', 'passed', 'dish', 'dished', 'feed', 'fed', 'dime', 'set up', 'helper'] },
+  { key: 'points',   words: ['score', 'scored', 'basket', 'bucket', 'layup', 'dunk', 'shot', 'made', 'hit', 'points', 'pts', 'drain', 'drains', 'money', 'trey', 'three', 'triple', 'downtown'] },
+]
+
+const NUM_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+
+function parseVoiceLocally(transcript, players) {
+  const t = transcript.toLowerCase()
+  const words = t.split(/\W+/).filter(Boolean)
+  console.log('[voice] words:', words)
+  console.log('[voice] player names to match:', players.map(p => p.name))
+
+  // Fuzzy-match any name part (first or last) against transcript words
+  const player = players.find(p => {
+    const nameParts = p.name.toLowerCase().split(/\s+/)
+    const matched = nameParts.some(namePart =>
+      namePart.length >= 3 && words.some(w => w.length >= 3 && levenshtein(w, namePart) <= 1)
+    )
+    console.log(`[voice] checking "${p.name}" (parts: ${JSON.stringify(nameParts)}) →`, matched)
+    return matched
+  })
+  if (!player) return null
+
+  // Match stat by keyword phrases/words
+  let statKey = null
+  for (const { key, words: kws } of STAT_KEYWORDS) {
+    if (kws.some(kw => t.includes(kw))) { statKey = key; break }
+  }
+  if (!statKey) return null
+
+  // Parse amount: digit > number word
+  let amount = null
+  for (const w of words) {
+    if (/^\d+$/.test(w)) { amount = parseInt(w, 10); break }
+  }
+  if (amount === null) {
+    for (const [word, val] of Object.entries(NUM_WORDS)) {
+      if (words.includes(word)) { amount = val; break }
+    }
+  }
+
+  // Default amounts: 3 for three-pointer cues, 2 for other points, 1 for everything else
+  if (statKey === 'points') {
+    const isThree = ['three', 'trey', 'triple', 'downtown'].some(kw => t.includes(kw))
+    amount = amount ?? (isThree ? 3 : 2)
+  } else {
+    amount = amount ?? 1
+  }
+
+  return { player, statKey, amount }
+}
 
 export default function LiveGame() {
   const navigate = useNavigate()
@@ -164,33 +224,6 @@ export default function LiveGame() {
     setLastEntry(null)
   }
 
-  function parseVoiceCommand(transcript) {
-    const words = transcript.toLowerCase().trim().split(/\s+/)
-    if (words.length < 2) return null
-
-    let amount = 1
-    let rest = words
-    const first = words[0]
-    if (/^\d+$/.test(first)) {
-      amount = parseInt(first, 10)
-      rest = words.slice(1)
-    } else if (NUMBER_WORDS[first] !== undefined) {
-      amount = NUMBER_WORDS[first]
-      rest = words.slice(1)
-    }
-
-    if (rest.length < 2) return null
-    const statKey = STAT_ALIASES[rest[0]]
-    if (!statKey) return null
-    const nameQuery = rest.slice(1).join(' ')
-    const player = playersRef.current.find(p => {
-      const name = p.name.toLowerCase()
-      const firstName = name.split(' ')[0]
-      return name.includes(nameQuery) || nameQuery.includes(firstName)
-    })
-    return player ? { statKey, player, amount } : null
-  }
-
   function launchRecognition() {
     if (!voiceActiveRef.current) return
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -210,11 +243,16 @@ export default function LiveGame() {
       }
       if (final) {
         const t = final.trim()
-        console.log('[voice]', t)
+        console.log('[voice] raw transcript:', JSON.stringify(t))
         setLiveTranscript(t)
-        const match = parseVoiceCommand(t)
-        if (match) logStat(match.player.id, match.statKey, match.amount)
-        setTimeout(() => setLiveTranscript(''), 800)
+        const match = parseVoiceLocally(t, playersRef.current)
+        if (match) {
+          logStat(match.player.id, match.statKey, match.amount)
+          setTimeout(() => setLiveTranscript(''), 800)
+        } else {
+          setLiveTranscript("Didn't catch that…")
+          setTimeout(() => setLiveTranscript(''), 1500)
+        }
         recognition.stop()
       } else {
         setLiveTranscript(interim)
@@ -594,17 +632,17 @@ export default function LiveGame() {
               letterSpacing: '0.15em', textTransform: 'uppercase',
               color: 'var(--muted)', margin: '0 0 8px',
             }}>
-              Voice Commands — say: [stat] [name] or [number] [stat] [name]
+              Voice — say the player's name + what they did
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px' }}>
               {[
-                'point [name]',
-                '2 points [name]',
-                '3 points [name]',
-                'assist [name]',
-                'rebound [name]',
-                'steal [name]',
-                'block [name]',
+                '[name] just scored',
+                'two points for [name]',
+                '[name] drove and scored',
+                '[name] got a rebound',
+                '[name] stole the ball',
+                '[name] blocked the shot',
+                '[name] dished the assist',
               ].map(ex => (
                 <span key={ex} style={{
                   fontFamily: 'var(--font-data)', fontSize: '11px', color: 'var(--accent)',

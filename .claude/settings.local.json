@@ -3,7 +3,9 @@
     "allow": [
       "Bash(node *)",
       "Bash(npm run *)",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "Skill(claude-api)",
+      "Bash(npm install *)"
     ]
   }
 }

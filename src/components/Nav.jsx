@@ -46,14 +46,9 @@ export default function Nav() {
               My Profile
             </Link>
           ) : (
-            <>
-              <Link to="/dashboard" className="btn-ghost" style={{ padding: '7px 16px', fontSize: '14px' }}>
-                My Teams
-              </Link>
-              <Link to="/log" className="btn-primary" style={{ padding: '8px 18px', fontSize: '14px' }}>
-                + Log Stats
-              </Link>
-            </>
+            <Link to="/dashboard" className="btn-ghost" style={{ padding: '7px 16px', fontSize: '14px' }}>
+              My Teams
+            </Link>
           )
         )}
 
