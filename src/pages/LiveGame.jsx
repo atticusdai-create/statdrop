@@ -172,6 +172,8 @@ export default function LiveGame() {
   const savingFlags = useRef({})
   const recognitionRef = useRef(null)
   const micPermittedRef = useRef(false)
+  const voiceActiveRef = useRef(false)
+  const audioUnlockedRef = useRef(false)
   const playersRef = useRef(players)
   const lastEntryTimerRef = useRef(null)
 
@@ -186,6 +188,7 @@ export default function LiveGame() {
 
   useEffect(() => {
     return () => {
+      voiceActiveRef.current = false
       recognitionRef.current?.stop()
       if (lastEntryTimerRef.current) clearTimeout(lastEntryTimerRef.current)
     }
@@ -285,9 +288,60 @@ export default function LiveGame() {
     setLastEntry(null)
   }
 
+  function startRecognitionLoop() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR || !voiceActiveRef.current) return
+
+    const recognition = new SR()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognitionRef.current = recognition
+
+    recognition.onresult = e => {
+      const t = e.results[0][0].transcript.trim()
+      console.log('[voice] transcript:', JSON.stringify(t))
+      setLiveTranscript(t)
+      recognition.stop()
+      const match = parseVoiceLocally(t, playersRef.current)
+      if (match) {
+        logStat(match.player.id, match.statKey, match.amount)
+        setTimeout(() => setLiveTranscript(''), 1500)
+      } else {
+        setLiveTranscript("Didn't catch that…")
+        setTimeout(() => setLiveTranscript(''), 2000)
+      }
+    }
+
+    recognition.onend = () => {
+      recognitionRef.current = null
+      if (!voiceActiveRef.current) return
+      setTimeout(() => startRecognitionLoop(), 80)
+    }
+
+    recognition.onerror = e => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return
+      console.error('Speech recognition error:', e.error)
+      recognitionRef.current = null
+      if (!voiceActiveRef.current) return
+      setTimeout(() => startRecognitionLoop(), 200)
+    }
+
+    try {
+      recognition.start()
+    } catch (err) {
+      console.error('Failed to start recognition:', err)
+      recognitionRef.current = null
+      if (voiceActiveRef.current) setTimeout(() => startRecognitionLoop(), 200)
+    }
+  }
+
   async function handleVoiceToggle() {
-    if (pttListening) {
+    if (voiceActiveRef.current) {
+      voiceActiveRef.current = false
       recognitionRef.current?.stop()
+      setPttListening(false)
+      setLiveTranscript('')
       return
     }
 
@@ -306,46 +360,20 @@ export default function LiveGame() {
       micPermittedRef.current = true
     }
 
+    // iOS Safari requires AudioContext to be created/resumed from a user gesture
+    if (!audioUnlockedRef.current) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)()
+        await ctx.resume()
+        ctx.close()
+      } catch {}
+      audioUnlockedRef.current = true
+    }
+
+    voiceActiveRef.current = true
     setPttListening(true)
     setLiveTranscript('')
-
-    const recognition = new SR()
-    recognition.continuous = false
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognitionRef.current = recognition
-
-    recognition.onresult = e => {
-      const t = e.results[0][0].transcript.trim()
-      console.log('[voice] transcript:', JSON.stringify(t))
-      setLiveTranscript(t)
-      const match = parseVoiceLocally(t, playersRef.current)
-      if (match) {
-        logStat(match.player.id, match.statKey, match.amount)
-        setTimeout(() => setLiveTranscript(''), 1500)
-      } else {
-        setLiveTranscript("Didn't catch that…")
-        setTimeout(() => setLiveTranscript(''), 2000)
-      }
-    }
-
-    recognition.onend = () => {
-      setPttListening(false)
-      recognitionRef.current = null
-    }
-
-    recognition.onerror = e => {
-      if (e.error === 'no-speech') setLiveTranscript('No speech detected')
-      else if (e.error !== 'aborted') console.error('Speech recognition error:', e.error)
-      setPttListening(false)
-    }
-
-    try {
-      recognition.start()
-    } catch (err) {
-      console.error('Failed to start recognition:', err)
-      setPttListening(false)
-    }
+    startRecognitionLoop()
   }
 
   function startGame() {
@@ -367,7 +395,9 @@ export default function LiveGame() {
   }
 
   function handleEndGame() {
+    voiceActiveRef.current = false
     recognitionRef.current?.stop()
+    setPttListening(false)
     setEnded(true)
     setTimeout(() => navigate(`/team/${selectedTeam}`), 1600)
   }
@@ -604,12 +634,12 @@ export default function LiveGame() {
                 background: '#16A34A', flexShrink: 0,
                 animation: 'voicePulse 0.8s ease-in-out infinite',
               }} />
-              Tap to Stop
+              Listening…
             </>
           ) : (
             <>
               <span style={{ fontSize: '22px', lineHeight: 1 }}>🎙</span>
-              Tap to Speak
+              Start Listening
             </>
           )}
         </button>
