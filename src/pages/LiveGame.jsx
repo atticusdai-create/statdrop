@@ -30,11 +30,11 @@ function levenshtein(a, b) {
 }
 
 const STAT_KEYWORDS = [
-  { key: 'blocks',   words: ['block', 'blocked', 'blocks', 'reject', 'rejected', 'rejection', 'swat', 'swatted'] },
-  { key: 'steals',   words: ['steal', 'stole', 'steals', 'stolen', 'rip', 'ripped', 'stripped', 'picked off', 'took it'] },
-  { key: 'rebounds', words: ['rebound', 'rebounded', 'rebounds', 'board', 'boards', 'glass', 'grabbed'] },
-  { key: 'assists',  words: ['assist', 'assisted', 'assists', 'pass', 'passed', 'dish', 'dished', 'feed', 'fed', 'dime', 'set up', 'helper'] },
-  { key: 'points',   words: ['score', 'scored', 'basket', 'bucket', 'layup', 'dunk', 'shot', 'made', 'hit', 'points', 'pts', 'drain', 'drains', 'money', 'trey', 'three', 'triple', 'downtown'] },
+  { key: 'blocks',   words: ['block', 'blocked', 'blocks', 'reject', 'rejected', 'rejection', 'swat', 'swatted', 'blocked the shot', 'blocked it'] },
+  { key: 'steals',   words: ['steal', 'stole', 'steals', 'stolen', 'rip', 'ripped', 'stripped', 'picked off', 'took it', 'picked it off'] },
+  { key: 'rebounds', words: ['rebound', 'rebounded', 'rebounds', 'board', 'boards', 'glass', 'grabbed', 'got a rebound'] },
+  { key: 'assists',  words: ['assist', 'assisted', 'assists', 'pass', 'passed', 'dish', 'dished', 'feed', 'fed', 'dime', 'set up', 'helper', 'with the assist'] },
+  { key: 'points',   words: ['score', 'scored', 'basket', 'bucket', 'layup', 'dunk', 'shot', 'made', 'hit', 'points', 'pts', 'drain', 'drains', 'money', 'trey', 'three', 'triple', 'downtown', 'drove and scored'] },
 ]
 
 const NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
@@ -690,11 +690,11 @@ export default function LiveGame() {
             <p style={{
               fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
               letterSpacing: '0.15em', textTransform: 'uppercase',
-              color: 'var(--muted)', margin: '0 0 8px',
+              color: 'var(--muted)', margin: '0 0 6px',
             }}>
-              Voice — say the player's name + what they did
+              Voice — use the player's name or jersey number
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px', marginBottom: '8px' }}>
               {[
                 '[name] just scored',
                 'two points for [name]',
@@ -703,6 +703,32 @@ export default function LiveGame() {
                 '[name] stole the ball',
                 '[name] blocked the shot',
                 '[name] dished the assist',
+              ].map(ex => (
+                <span key={ex} style={{
+                  fontFamily: 'var(--font-data)', fontSize: '11px', color: 'var(--accent)',
+                  background: 'var(--ground)', borderRadius: '5px', padding: '2px 7px',
+                  border: '1px solid var(--border)',
+                }}>
+                  "{ex}"
+                </span>
+              ))}
+            </div>
+            <p style={{
+              fontFamily: 'var(--font-display)', fontSize: '10px', fontWeight: 700,
+              letterSpacing: '0.15em', textTransform: 'uppercase',
+              color: 'var(--muted)', margin: '0 0 6px',
+            }}>
+              Or use "number [#]"
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px' }}>
+              {[
+                'number 23 scored',
+                'number 5 got a rebound',
+                'number 14 stole the ball',
+                'number 2 blocked it',
+                'number 23 with the assist',
+                'number 5 drove and scored',
+                'number 14 picked it off',
               ].map(ex => (
                 <span key={ex} style={{
                   fontFamily: 'var(--font-data)', fontSize: '11px', color: 'var(--accent)',
