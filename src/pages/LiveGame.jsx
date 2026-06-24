@@ -15,6 +15,10 @@ const STATS = [
 
 const ZERO = { points: 0, assists: 0, rebounds: 0, steals: 0, blocks: 0 }
 
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
+const isMobileSafari = isIOS && isSafari
+
 function levenshtein(a, b) {
   if (Math.abs(a.length - b.length) > 2) return 99
   const m = a.length, n = b.length
@@ -30,11 +34,11 @@ function levenshtein(a, b) {
 }
 
 const STAT_KEYWORDS = [
-  { key: 'blocks',   words: ['block', 'blocked', 'blocks', 'reject', 'rejected', 'rejection', 'swat', 'swatted', 'blocked the shot', 'blocked it'] },
-  { key: 'steals',   words: ['steal', 'stole', 'steals', 'stolen', 'rip', 'ripped', 'stripped', 'picked off', 'took it', 'picked it off'] },
-  { key: 'rebounds', words: ['rebound', 'rebounded', 'rebounds', 'board', 'boards', 'glass', 'grabbed', 'got a rebound'] },
-  { key: 'assists',  words: ['assist', 'assisted', 'assists', 'pass', 'passed', 'dish', 'dished', 'feed', 'fed', 'dime', 'set up', 'helper', 'with the assist'] },
-  { key: 'points',   words: ['score', 'scored', 'basket', 'bucket', 'layup', 'dunk', 'shot', 'made', 'hit', 'points', 'pts', 'drain', 'drains', 'money', 'trey', 'three', 'triple', 'downtown', 'drove and scored'] },
+  { key: 'blocks',   words: ['block', 'blocked', 'blocks', 'reject', 'rejected', 'rejection', 'swat', 'swatted', 'blocked the shot', 'blocked it', 'sent it back', 'denied', 'stuffed', 'goaltended'] },
+  { key: 'steals',   words: ['steal', 'stole', 'steals', 'stolen', 'rip', 'ripped', 'stripped', 'picked off', 'took it', 'picked it off', 'picked', 'deflected', 'poked away', 'got a hand on'] },
+  { key: 'rebounds', words: ['rebound', 'rebounded', 'rebounds', 'board', 'boards', 'glass', 'grabbed', 'got a rebound', 'pulled down', 'hauled in', 'snatched', 'boxed out', 'offensive board', 'defensive board', 'tip', 'tipped'] },
+  { key: 'assists',  words: ['assist', 'assisted', 'assists', 'pass', 'passed', 'dish', 'dished', 'feed', 'fed', 'dime', 'set up', 'helper', 'with the assist', 'found', 'threaded', 'hit him', 'hit her', 'connected', 'dropped off', 'kicked out', 'dished it', 'hockey assist'] },
+  { key: 'points',   words: ['score', 'scored', 'basket', 'bucket', 'buckets', 'layup', 'dunk', 'dunked', 'shot', 'made', 'makes', 'hit', 'points', 'pts', 'drain', 'drains', 'money', 'trey', 'three', 'triple', 'downtown', 'drove and scored', 'knocked down', 'drilled', 'nailed', 'dropped', 'put in', 'put it in', 'and one', 'converted', 'finished'] },
 ]
 
 const NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
@@ -162,6 +166,7 @@ export default function LiveGame() {
   const [savingSet, setSavingSet] = useState(new Set())
 
   const [voiceActive, setVoiceActive] = useState(false)
+  const [tapListening, setTapListening] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState('')
   const [lastEntry, setLastEntry] = useState(null)
 
@@ -321,7 +326,7 @@ export default function LiveGame() {
     }
 
     recognition.onend = () => {
-      if (voiceActiveRef.current) setTimeout(launchRecognition, 100)
+      if (voiceActiveRef.current) setTimeout(launchRecognition, isSafari ? 50 : 100)
     }
 
     recognition.onerror = e => {
@@ -339,10 +344,18 @@ export default function LiveGame() {
     }
   }
 
-  function startListening() {
+  async function startListening() {
     if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
       alert('Voice input requires Chrome, Edge, or Safari.')
       return
+    }
+    if (isIOS && navigator.mediaDevices?.getUserMedia) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+      } catch {
+        alert('Microphone access is required for voice input.')
+        return
+      }
     }
     voiceActiveRef.current = true
     setVoiceActive(true)
@@ -355,6 +368,70 @@ export default function LiveGame() {
     recognitionRef.current = null
     setVoiceActive(false)
     setLiveTranscript('')
+  }
+
+  async function tapToSpeak() {
+    if (tapListening) return
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { alert('Voice input requires Safari on iOS.'); return }
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+      } catch {
+        alert('Microphone access is required for voice input.')
+        return
+      }
+    }
+    setTapListening(true)
+    setLiveTranscript('')
+    const recognition = new SR()
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+    recognitionRef.current = recognition
+
+    recognition.onresult = e => {
+      let interim = '', final = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) final += t
+        else interim += t
+      }
+      if (final) {
+        const t = final.trim()
+        console.log('[voice] tap transcript:', JSON.stringify(t))
+        setLiveTranscript(t)
+        const match = parseVoiceLocally(t, playersRef.current)
+        if (match) {
+          logStat(match.player.id, match.statKey, match.amount)
+          setTimeout(() => setLiveTranscript(''), 800)
+        } else {
+          setLiveTranscript("Didn't catch that…")
+          setTimeout(() => setLiveTranscript(''), 1500)
+        }
+      } else {
+        setLiveTranscript(interim)
+      }
+    }
+
+    recognition.onend = () => {
+      setTapListening(false)
+      recognitionRef.current = null
+    }
+
+    recognition.onerror = e => {
+      if (e.error !== 'aborted' && e.error !== 'no-speech') {
+        console.error('Speech recognition error:', e.error)
+      }
+      setTapListening(false)
+    }
+
+    try {
+      recognition.start()
+    } catch (err) {
+      console.error('Failed to start tap recognition:', err)
+      setTapListening(false)
+    }
   }
 
   function startGame() {
@@ -588,42 +665,81 @@ export default function LiveGame() {
           </div>
         </div>
 
-        {/* Row 2: voice toggle button */}
-        <button
-          onClick={voiceActive ? stopListening : startListening}
-          style={{
-            width: '100%', marginBottom: '8px',
-            padding: '8px 14px', borderRadius: '8px',
-            border: `1.5px solid ${voiceActive ? '#E11D48' : 'var(--border)'}`,
-            background: voiceActive ? 'rgba(225,29,72,0.07)' : 'transparent',
-            color: voiceActive ? '#E11D48' : 'var(--muted)',
-            fontFamily: 'var(--font-display)',
-            fontSize: '12px', fontWeight: 700, letterSpacing: '0.1em',
-            textTransform: 'uppercase', cursor: 'pointer',
-            transition: 'all 0.15s',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-            lineHeight: 1,
-          }}
-        >
-          {voiceActive ? (
-            <>
-              <span style={{
-                display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                background: '#E11D48', flexShrink: 0,
-                animation: 'voicePulse 1s ease-in-out infinite',
-              }} />
-              Stop Listening
-            </>
-          ) : (
-            <>
-              <span style={{
-                display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                background: 'var(--muted)', flexShrink: 0,
-              }} />
-              Start Listening
-            </>
-          )}
-        </button>
+        {/* Row 2: voice button — tap-to-speak on iOS, toggle on other browsers */}
+        {isMobileSafari ? (
+          <button
+            onClick={tapToSpeak}
+            disabled={tapListening}
+            style={{
+              width: '100%', marginBottom: '8px',
+              padding: '8px 14px', borderRadius: '8px',
+              border: `1.5px solid ${tapListening ? '#E11D48' : 'var(--border)'}`,
+              background: tapListening ? 'rgba(225,29,72,0.07)' : 'transparent',
+              color: tapListening ? '#E11D48' : 'var(--muted)',
+              fontFamily: 'var(--font-display)',
+              fontSize: '12px', fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', cursor: tapListening ? 'default' : 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+              lineHeight: 1,
+            }}
+          >
+            {tapListening ? (
+              <>
+                <span style={{
+                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                  background: '#E11D48', flexShrink: 0,
+                  animation: 'voicePulse 1s ease-in-out infinite',
+                }} />
+                Listening…
+              </>
+            ) : (
+              <>
+                <span style={{
+                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                  background: 'var(--muted)', flexShrink: 0,
+                }} />
+                Tap to Speak
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={voiceActive ? stopListening : startListening}
+            style={{
+              width: '100%', marginBottom: '8px',
+              padding: '8px 14px', borderRadius: '8px',
+              border: `1.5px solid ${voiceActive ? '#E11D48' : 'var(--border)'}`,
+              background: voiceActive ? 'rgba(225,29,72,0.07)' : 'transparent',
+              color: voiceActive ? '#E11D48' : 'var(--muted)',
+              fontFamily: 'var(--font-display)',
+              fontSize: '12px', fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+              lineHeight: 1,
+            }}
+          >
+            {voiceActive ? (
+              <>
+                <span style={{
+                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                  background: '#E11D48', flexShrink: 0,
+                  animation: 'voicePulse 1s ease-in-out infinite',
+                }} />
+                Stop Listening
+              </>
+            ) : (
+              <>
+                <span style={{
+                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                  background: 'var(--muted)', flexShrink: 0,
+                }} />
+                Start Listening
+              </>
+            )}
+          </button>
+        )}
 
         {/* Row 3: live team scoreboard */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '4px' }}>
@@ -649,8 +765,8 @@ export default function LiveGame() {
           ))}
         </div>
 
-        {/* Row 4: live transcript (only when voice is active) */}
-        {voiceActive && (
+        {/* Row 4: live transcript */}
+        {(isMobileSafari ? (tapListening || !!liveTranscript) : voiceActive) && (
           <div style={{
             marginTop: '8px', padding: '7px 12px',
             background: 'rgba(225,29,72,0.05)', borderRadius: '7px',
