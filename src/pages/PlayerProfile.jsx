@@ -331,10 +331,7 @@ export default function PlayerProfile() {
     setDeleteError('')
     const { error: playerErr } = await supabase.from('players').delete().eq('id', id)
     if (playerErr) { setDeleteError(playerErr.message); setDeleteLoading(false); return }
-    const { error: rpcErr } = await supabase.rpc('delete_user')
-    if (rpcErr) {
-      await signOut()
-    }
+    await signOut()
     navigate('/', { replace: true })
   }
 
@@ -591,11 +588,8 @@ export default function PlayerProfile() {
               letterSpacing: '-0.01em', textTransform: 'uppercase',
               color: 'var(--text)', margin: '0 0 12px',
             }}>Delete Account</h2>
-            <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0 0 8px', lineHeight: '1.6' }}>
-              This will permanently delete your player profile and all your game stats. This cannot be undone.
-            </p>
-            <p style={{ fontSize: '14px', color: '#E53E3E', margin: '0 0 24px', lineHeight: '1.6', fontWeight: 500 }}>
-              Are you sure you want to delete your account?
+            <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0 0 24px', lineHeight: '1.6' }}>
+              Are you sure? This will permanently delete your account and all your stats.
             </p>
             {deleteError && (
               <p style={{ color: '#E53E3E', fontSize: '13px', margin: '0 0 16px' }}>{deleteError}</p>
