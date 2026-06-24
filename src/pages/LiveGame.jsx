@@ -45,12 +45,15 @@ function parseVoiceLocally(transcript, players) {
   console.log('[voice] words:', words)
   console.log('[voice] player names to match:', players.map(p => p.name))
 
-  // Fuzzy-match any name part (first or last) against transcript words
+  // Match any name part (first, last, or nickname) against transcript words
   const player = players.find(p => {
     const nameParts = p.name.toLowerCase().split(/\s+/)
-    const matched = nameParts.some(namePart =>
-      namePart.length >= 3 && words.some(w => w.length >= 3 && levenshtein(w, namePart) <= 1)
-    )
+    const matched = nameParts.some(namePart => {
+      if (namePart.length <= 3) {
+        return words.includes(namePart)
+      }
+      return words.some(w => w.length >= 3 && levenshtein(w, namePart) <= 1)
+    })
     console.log(`[voice] checking "${p.name}" (parts: ${JSON.stringify(nameParts)}) →`, matched)
     return matched
   })
