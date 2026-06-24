@@ -302,7 +302,6 @@ export default function LiveGame() {
       const t = e.results[0][0].transcript.trim()
       console.log('[voice] transcript:', JSON.stringify(t))
       setLiveTranscript(t)
-      recognition.stop()
       const match = parseVoiceLocally(t, playersRef.current)
       if (match) {
         logStat(match.player.id, match.statKey, match.amount)
@@ -316,15 +315,15 @@ export default function LiveGame() {
     recognition.onend = () => {
       recognitionRef.current = null
       if (!voiceActiveRef.current) return
-      setTimeout(() => startRecognitionLoop(), 80)
+      startRecognitionLoop()
     }
 
     recognition.onerror = e => {
-      if (e.error === 'no-speech' || e.error === 'aborted') return
+      if (e.error === 'aborted') return
       console.error('Speech recognition error:', e.error)
       recognitionRef.current = null
       if (!voiceActiveRef.current) return
-      setTimeout(() => startRecognitionLoop(), 200)
+      startRecognitionLoop()
     }
 
     try {
