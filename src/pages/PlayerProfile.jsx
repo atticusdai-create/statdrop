@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseAdmin } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
 const STAT_CHARTS = [
@@ -331,7 +331,12 @@ export default function PlayerProfile() {
     setDeleteError('')
     const { error: playerErr } = await supabase.from('players').delete().eq('id', id)
     if (playerErr) { setDeleteError(playerErr.message); setDeleteLoading(false); return }
-    await signOut()
+    if (supabaseAdmin && user?.id) {
+      const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(user.id)
+      if (authErr) await signOut()
+    } else {
+      await signOut()
+    }
     navigate('/', { replace: true })
   }
 

@@ -10,7 +10,8 @@ export default function JoinTeam() {
   const [step, setStep] = useState(1)
   const [code, setCode] = useState('')
   const [team, setTeam] = useState(null)
-  const [playerName, setPlayerName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [position, setPosition] = useState('')
   const [jerseyNumber, setJerseyNumber] = useState('')
   const [height, setHeight] = useState('')
@@ -51,7 +52,7 @@ export default function JoinTeam() {
 
   async function handleJoin(e) {
     e.preventDefault()
-    if (!playerName.trim()) { setError('Enter your name.'); return }
+    if (!firstName.trim()) { setError('Enter your first name.'); return }
     if (!position) { setError('Select your position.'); return }
     if (jerseyNumber === '' || jerseyNumber === null) { setError('Enter your jersey number.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
@@ -75,7 +76,8 @@ export default function JoinTeam() {
     const { data: playerData, error: playerErr } = await supabase
       .from('players')
       .insert([{
-        name: playerName.trim(),
+        name: [firstName.trim(), lastName.trim()].filter(Boolean).join(' '),
+        last_name: lastName.trim() || null,
         position: position,
         jersey_number: parseInt(jerseyNumber, 10),
         height: height.trim() || null,
@@ -199,18 +201,31 @@ export default function JoinTeam() {
       </div>
 
       <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div>
-          <label className="label" htmlFor="player-name">Your name</label>
-          <input
-            id="player-name"
-            className="field"
-            type="text"
-            placeholder="e.g. Marcus Johnson"
-            value={playerName}
-            onChange={e => setPlayerName(e.target.value)}
-            autoFocus
-            required
-          />
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ flex: 1 }}>
+            <label className="label" htmlFor="first-name">First name</label>
+            <input
+              id="first-name"
+              className="field"
+              type="text"
+              placeholder="e.g. Marcus"
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+              autoFocus
+              required
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label className="label" htmlFor="last-name">Last name</label>
+            <input
+              id="last-name"
+              className="field"
+              type="text"
+              placeholder="e.g. Johnson"
+              value={lastName}
+              onChange={e => setLastName(e.target.value)}
+            />
+          </div>
         </div>
 
         <div>

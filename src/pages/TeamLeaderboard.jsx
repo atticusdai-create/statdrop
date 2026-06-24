@@ -50,7 +50,7 @@ export default function TeamLeaderboard() {
   const [sortKey, setSortKey] = useState('avg_net_rating')
   const [sortDir, setSortDir] = useState('desc')
   const [showAddPlayer, setShowAddPlayer] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' })
+  const [addForm, setAddForm] = useState({ firstName: '', lastName: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' })
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState('')
   const [addSuccess, setAddSuccess] = useState('')
@@ -63,7 +63,7 @@ export default function TeamLeaderboard() {
       setLoading(true)
       const [{ data: teamData, error: teamErr }, { data: stats, error: statsErr }] = await Promise.all([
         supabase.from('teams').select('*').eq('id', id).single(),
-        supabase.from('game_stats').select('*, players(name, position, jersey_number)').eq('team_id', id),
+        supabase.from('game_stats').select('*, players(name, last_name, position, jersey_number)').eq('team_id', id),
       ])
       if (teamErr || !teamData) { setError('Team not found.'); setLoading(false); return }
       if (statsErr) { setError(statsErr.message); setLoading(false); return }
@@ -72,16 +72,17 @@ export default function TeamLeaderboard() {
       const byPlayer = {}
       for (const s of (stats || [])) {
         const pid = s.player_id
-        if (!byPlayer[pid]) byPlayer[pid] = { playerId: pid, name: s.players?.name || 'Unknown', position: s.players?.position || '', jerseyNumber: s.players?.jersey_number ?? null, records: [] }
+        if (!byPlayer[pid]) byPlayer[pid] = { playerId: pid, name: s.players?.name || 'Unknown', lastName: s.players?.last_name || null, position: s.players?.position || '', jerseyNumber: s.players?.jersey_number ?? null, records: [] }
         byPlayer[pid].records.push(s)
       }
 
-      const compiled = Object.values(byPlayer).map(({ playerId, name, position, jerseyNumber, records }) => {
+      const compiled = Object.values(byPlayer).map(({ playerId, name, lastName, position, jerseyNumber, records }) => {
         const games = records.length
         const netSum = records.reduce((s, r) => s + calcNetRatingForRow(r), 0)
         return {
           playerId,
           name,
+          lastName,
           position,
           jerseyNumber,
           games,
@@ -129,12 +130,14 @@ export default function TeamLeaderboard() {
   async function handleAddPlayer(e) {
     e.preventDefault()
     setAddError('')
-    if (!addForm.name.trim()) { setAddError('Player name is required.'); return }
+    if (!addForm.firstName.trim()) { setAddError('First name is required.'); return }
+    const fullName = [addForm.firstName.trim(), addForm.lastName.trim()].filter(Boolean).join(' ')
     setAddLoading(true)
     const { error: pe } = await supabase
       .from('players')
       .insert([{
-        name: addForm.name.trim(),
+        name: fullName,
+        last_name: addForm.lastName.trim() || null,
         position: addForm.position.trim() || null,
         jersey_number: addForm.jerseyNumber ? parseInt(addForm.jerseyNumber, 10) : null,
         height: addForm.height.trim() || null,
@@ -143,8 +146,8 @@ export default function TeamLeaderboard() {
       }])
     setAddLoading(false)
     if (pe) { setAddError(pe.message); return }
-    setAddSuccess(`${addForm.name.trim()} added to the roster.`)
-    setAddForm({ name: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' })
+    setAddSuccess(`${fullName} added to the roster.`)
+    setAddForm({ firstName: '', lastName: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' })
     setTimeout(() => { setAddSuccess(''); setShowAddPlayer(false) }, 1500)
   }
 
@@ -246,17 +249,30 @@ export default function TeamLeaderboard() {
               <p style={{ color: '#10B981', fontFamily: 'var(--font-data)', fontSize: '14px', margin: 0 }}>{addSuccess}</p>
             ) : (
               <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div>
-                  <label className="label" htmlFor="add-name">Name</label>
-                  <input
-                    id="add-name"
-                    className="field"
-                    type="text"
-                    placeholder="Player name"
-                    value={addForm.name}
-                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                    autoFocus
-                  />
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="label" htmlFor="add-first-name">First Name</label>
+                    <input
+                      id="add-first-name"
+                      className="field"
+                      type="text"
+                      placeholder="e.g. Marcus"
+                      value={addForm.firstName}
+                      onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))}
+                      autoFocus
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="label" htmlFor="add-last-name">Last Name</label>
+                    <input
+                      id="add-last-name"
+                      className="field"
+                      type="text"
+                      placeholder="e.g. Johnson"
+                      value={addForm.lastName}
+                      onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="label" htmlFor="add-position">Position</label>

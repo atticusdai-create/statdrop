@@ -48,23 +48,20 @@ function parseVoiceLocally(transcript, players) {
   let player = null
   let jerseyWordIdx = -1
 
-  // Jersey number matching: "number 23 ..." or any standalone digit matching a jersey
+  // "number 23 ..." — explicit jersey number prefix
   const numberKeywordIdx = words.indexOf('number')
   if (numberKeywordIdx >= 0 && numberKeywordIdx < words.length - 1) {
     const num = parseInt(words[numberKeywordIdx + 1], 10)
     if (!isNaN(num)) {
-      const jerseyMatch = players.find(p => p.jersey_number === num)
+      const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
       if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = numberKeywordIdx + 1 }
     }
   }
-  if (!player) {
-    for (let i = 0; i < words.length; i++) {
-      if (/^\d+$/.test(words[i])) {
-        const num = parseInt(words[i], 10)
-        const jerseyMatch = players.find(p => p.jersey_number === num)
-        if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = i; break }
-      }
-    }
+  // Digit at the start of the utterance — "23 scored", "14 got the rebound"
+  if (!player && words.length > 0 && /^\d+$/.test(words[0])) {
+    const num = parseInt(words[0], 10)
+    const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
+    if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = 0 }
   }
 
   // Fall back to name matching
