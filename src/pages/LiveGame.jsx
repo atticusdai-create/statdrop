@@ -15,9 +15,6 @@ const STATS = [
 
 const ZERO = { points: 0, assists: 0, rebounds: 0, steals: 0, blocks: 0 }
 
-const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
-const isMobileSafari = isIOS && isSafari
 
 function levenshtein(a, b) {
   if (Math.abs(a.length - b.length) > 2) return 99
@@ -165,8 +162,7 @@ export default function LiveGame() {
   const [flash, setFlash] = useState({})
   const [savingSet, setSavingSet] = useState(new Set())
 
-  const [voiceActive, setVoiceActive] = useState(false)
-  const [tapListening, setTapListening] = useState(false)
+  const [pttListening, setPttListening] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState('')
   const [lastEntry, setLastEntry] = useState(null)
 
@@ -175,7 +171,7 @@ export default function LiveGame() {
   const pendingRef = useRef({})
   const savingFlags = useRef({})
   const recognitionRef = useRef(null)
-  const voiceActiveRef = useRef(false)
+  const micPermittedRef = useRef(false)
   const playersRef = useRef(players)
   const lastEntryTimerRef = useRef(null)
 
@@ -190,7 +186,6 @@ export default function LiveGame() {
 
   useEffect(() => {
     return () => {
-      voiceActiveRef.current = false
       recognitionRef.current?.stop()
       if (lastEntryTimerRef.current) clearTimeout(lastEntryTimerRef.current)
     }
@@ -290,148 +285,68 @@ export default function LiveGame() {
     setLastEntry(null)
   }
 
-  function launchRecognition() {
-    if (!voiceActiveRef.current) return
+  async function startPushToTalk(e) {
+    e.preventDefault()
+    if (pttListening) return
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { alert('Voice input requires Chrome, Edge, or Safari.'); return }
+
+    if (!micPermittedRef.current && navigator.mediaDevices?.getUserMedia) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+        micPermittedRef.current = true
+      } catch {
+        alert('Microphone access is required for voice input.')
+        return
+      }
+    } else {
+      micPermittedRef.current = true
+    }
+
+    setPttListening(true)
+    setLiveTranscript('')
+
     const recognition = new SR()
     recognition.continuous = false
-    recognition.interimResults = true
+    recognition.interimResults = false
     recognition.lang = 'en-US'
     recognitionRef.current = recognition
 
     recognition.onresult = e => {
-      let interim = ''
-      let final = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) final += t
-        else interim += t
-      }
-      if (final) {
-        const t = final.trim()
-        console.log('[voice] raw transcript:', JSON.stringify(t))
-        setLiveTranscript(t)
-        const match = parseVoiceLocally(t, playersRef.current)
-        if (match) {
-          logStat(match.player.id, match.statKey, match.amount)
-          setTimeout(() => setLiveTranscript(''), 800)
-        } else {
-          setLiveTranscript("Didn't catch that…")
-          setTimeout(() => setLiveTranscript(''), 1500)
-        }
-        recognition.stop()
+      const t = e.results[0][0].transcript.trim()
+      console.log('[voice] ptt transcript:', JSON.stringify(t))
+      setLiveTranscript(t)
+      const match = parseVoiceLocally(t, playersRef.current)
+      if (match) {
+        logStat(match.player.id, match.statKey, match.amount)
+        setTimeout(() => setLiveTranscript(''), 1500)
       } else {
-        setLiveTranscript(interim)
+        setLiveTranscript("Didn't catch that…")
+        setTimeout(() => setLiveTranscript(''), 2000)
       }
     }
 
     recognition.onend = () => {
-      if (voiceActiveRef.current) setTimeout(launchRecognition, isSafari ? 50 : 100)
+      setPttListening(false)
+      recognitionRef.current = null
     }
 
     recognition.onerror = e => {
-      if (e.error !== 'aborted' && e.error !== 'no-speech') {
-        console.error('Speech recognition error:', e.error)
-      }
-      // onend fires after onerror and will restart
+      if (e.error === 'no-speech') setLiveTranscript('No speech detected')
+      else if (e.error !== 'aborted') console.error('Speech recognition error:', e.error)
+      setPttListening(false)
     }
 
     try {
       recognition.start()
     } catch (err) {
       console.error('Failed to start recognition:', err)
-      if (voiceActiveRef.current) setTimeout(launchRecognition, 500)
+      setPttListening(false)
     }
   }
 
-  async function startListening() {
-    if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
-      alert('Voice input requires Chrome, Edge, or Safari.')
-      return
-    }
-    if (isIOS && navigator.mediaDevices?.getUserMedia) {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
-      } catch {
-        alert('Microphone access is required for voice input.')
-        return
-      }
-    }
-    voiceActiveRef.current = true
-    setVoiceActive(true)
-    launchRecognition()
-  }
-
-  function stopListening() {
-    voiceActiveRef.current = false
+  function stopPushToTalk() {
     recognitionRef.current?.stop()
-    recognitionRef.current = null
-    setVoiceActive(false)
-    setLiveTranscript('')
-  }
-
-  async function tapToSpeak() {
-    if (tapListening) return
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { alert('Voice input requires Safari on iOS.'); return }
-    if (navigator.mediaDevices?.getUserMedia) {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
-      } catch {
-        alert('Microphone access is required for voice input.')
-        return
-      }
-    }
-    setTapListening(true)
-    setLiveTranscript('')
-    const recognition = new SR()
-    recognition.continuous = false
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-    recognitionRef.current = recognition
-
-    recognition.onresult = e => {
-      let interim = '', final = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) final += t
-        else interim += t
-      }
-      if (final) {
-        const t = final.trim()
-        console.log('[voice] tap transcript:', JSON.stringify(t))
-        setLiveTranscript(t)
-        const match = parseVoiceLocally(t, playersRef.current)
-        if (match) {
-          logStat(match.player.id, match.statKey, match.amount)
-          setTimeout(() => setLiveTranscript(''), 800)
-        } else {
-          setLiveTranscript("Didn't catch that…")
-          setTimeout(() => setLiveTranscript(''), 1500)
-        }
-      } else {
-        setLiveTranscript(interim)
-      }
-    }
-
-    recognition.onend = () => {
-      setTapListening(false)
-      recognitionRef.current = null
-    }
-
-    recognition.onerror = e => {
-      if (e.error !== 'aborted' && e.error !== 'no-speech') {
-        console.error('Speech recognition error:', e.error)
-      }
-      setTapListening(false)
-    }
-
-    try {
-      recognition.start()
-    } catch (err) {
-      console.error('Failed to start tap recognition:', err)
-      setTapListening(false)
-    }
   }
 
   function startGame() {
@@ -453,7 +368,7 @@ export default function LiveGame() {
   }
 
   function handleEndGame() {
-    stopListening()
+    recognitionRef.current?.stop()
     setEnded(true)
     setTimeout(() => navigate(`/team/${selectedTeam}`), 1600)
   }
@@ -665,81 +580,43 @@ export default function LiveGame() {
           </div>
         </div>
 
-        {/* Row 2: voice button — tap-to-speak on iOS, toggle on other browsers */}
-        {isMobileSafari ? (
-          <button
-            onClick={tapToSpeak}
-            disabled={tapListening}
-            style={{
-              width: '100%', marginBottom: '8px',
-              padding: '8px 14px', borderRadius: '8px',
-              border: `1.5px solid ${tapListening ? '#E11D48' : 'var(--border)'}`,
-              background: tapListening ? 'rgba(225,29,72,0.07)' : 'transparent',
-              color: tapListening ? '#E11D48' : 'var(--muted)',
-              fontFamily: 'var(--font-display)',
-              fontSize: '12px', fontWeight: 700, letterSpacing: '0.1em',
-              textTransform: 'uppercase', cursor: tapListening ? 'default' : 'pointer',
-              transition: 'all 0.15s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-              lineHeight: 1,
-            }}
-          >
-            {tapListening ? (
-              <>
-                <span style={{
-                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                  background: '#E11D48', flexShrink: 0,
-                  animation: 'voicePulse 1s ease-in-out infinite',
-                }} />
-                Listening…
-              </>
-            ) : (
-              <>
-                <span style={{
-                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                  background: 'var(--muted)', flexShrink: 0,
-                }} />
-                Tap to Speak
-              </>
-            )}
-          </button>
-        ) : (
-          <button
-            onClick={voiceActive ? stopListening : startListening}
-            style={{
-              width: '100%', marginBottom: '8px',
-              padding: '8px 14px', borderRadius: '8px',
-              border: `1.5px solid ${voiceActive ? '#E11D48' : 'var(--border)'}`,
-              background: voiceActive ? 'rgba(225,29,72,0.07)' : 'transparent',
-              color: voiceActive ? '#E11D48' : 'var(--muted)',
-              fontFamily: 'var(--font-display)',
-              fontSize: '12px', fontWeight: 700, letterSpacing: '0.1em',
-              textTransform: 'uppercase', cursor: 'pointer',
-              transition: 'all 0.15s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-              lineHeight: 1,
-            }}
-          >
-            {voiceActive ? (
-              <>
-                <span style={{
-                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                  background: '#E11D48', flexShrink: 0,
-                  animation: 'voicePulse 1s ease-in-out infinite',
-                }} />
-                Stop Listening
-              </>
-            ) : (
-              <>
-                <span style={{
-                  display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                  background: 'var(--muted)', flexShrink: 0,
-                }} />
-                Start Listening
-              </>
-            )}
-          </button>
-        )}
+        {/* Row 2: push-to-talk button */}
+        <button
+          onPointerDown={startPushToTalk}
+          onPointerUp={stopPushToTalk}
+          onPointerCancel={stopPushToTalk}
+          style={{
+            width: '100%', marginBottom: '8px',
+            padding: '18px 14px', borderRadius: '12px',
+            border: `2px solid ${pttListening ? '#E11D48' : 'var(--border)'}`,
+            background: pttListening ? 'rgba(225,29,72,0.1)' : 'var(--ground)',
+            color: pttListening ? '#E11D48' : 'var(--text)',
+            fontFamily: 'var(--font-display)',
+            fontSize: '15px', fontWeight: 700, letterSpacing: '0.12em',
+            textTransform: 'uppercase', cursor: 'pointer',
+            transition: 'border-color 0.1s, background 0.1s, color 0.1s',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+            lineHeight: 1,
+            touchAction: 'none',
+            userSelect: 'none', WebkitUserSelect: 'none',
+          }}
+        >
+          {pttListening ? (
+            <>
+              <span style={{
+                display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
+                background: '#E11D48', flexShrink: 0,
+                animation: 'voicePulse 0.8s ease-in-out infinite',
+              }} />
+              Listening…
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: '20px', lineHeight: 1 }}>🎙</span>
+              Hold to Speak
+            </>
+          )}
+        </button>
 
         {/* Row 3: live team scoreboard */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '4px' }}>
@@ -765,26 +642,19 @@ export default function LiveGame() {
           ))}
         </div>
 
-        {/* Row 4: live transcript */}
-        {(isMobileSafari ? (tapListening || !!liveTranscript) : voiceActive) && (
+        {/* Row 4: transcript shown briefly after release */}
+        {!!liveTranscript && (
           <div style={{
-            marginTop: '8px', padding: '7px 12px',
-            background: 'rgba(225,29,72,0.05)', borderRadius: '7px',
+            marginTop: '8px', padding: '8px 14px',
+            background: 'rgba(225,29,72,0.05)', borderRadius: '8px',
             border: '1px solid rgba(225,29,72,0.18)',
-            display: 'flex', alignItems: 'center', gap: '8px',
-            minHeight: '30px',
+            minHeight: '32px',
           }}>
             <span style={{
-              width: '5px', height: '5px', borderRadius: '50%',
-              background: '#E11D48', flexShrink: 0,
-              animation: 'voicePulse 1s ease-in-out infinite',
-            }} />
-            <span style={{
-              fontFamily: 'var(--font-data)', fontSize: '12px',
-              color: liveTranscript ? 'var(--text)' : 'var(--muted)',
-              fontStyle: liveTranscript ? 'normal' : 'italic',
+              fontFamily: 'var(--font-data)', fontSize: '13px',
+              color: 'var(--text)',
             }}>
-              {liveTranscript || 'Listening…'}
+              {liveTranscript}
             </span>
           </div>
         )}
