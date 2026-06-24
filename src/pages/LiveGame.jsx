@@ -57,11 +57,14 @@ function parseVoiceLocally(transcript, players) {
       if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = numberKeywordIdx + 1 }
     }
   }
-  // Digit at the start of the utterance — "23 scored", "14 got the rebound"
-  if (!player && words.length > 0 && /^\d+$/.test(words[0])) {
-    const num = parseInt(words[0], 10)
-    const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
-    if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = 0 }
+  // Scan every word for a jersey number match
+  if (!player) {
+    for (let i = 0; i < words.length; i++) {
+      if (!/^\d+$/.test(words[i])) continue
+      const num = parseInt(words[i], 10)
+      const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
+      if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = i; break }
+    }
   }
 
   // Fall back to name matching
