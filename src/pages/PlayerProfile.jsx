@@ -374,6 +374,17 @@ export default function PlayerProfile() {
             letterSpacing: '-0.02em', textTransform: 'uppercase',
             color: 'var(--text)', margin: 0,
           }}>{player.name}</h1>
+          {player.jersey_number != null && (
+            <span style={{
+              fontFamily: 'var(--font-data)', fontSize: '14px', fontWeight: 700,
+              letterSpacing: '0.08em',
+              color: 'var(--muted)',
+              background: 'var(--ground)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px', padding: '4px 12px',
+              alignSelf: 'center',
+            }}>#{player.jersey_number}</span>
+          )}
           {player.position && (
             <span style={{
               fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 700,

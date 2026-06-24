@@ -12,6 +12,7 @@ export default function JoinTeam() {
   const [team, setTeam] = useState(null)
   const [playerName, setPlayerName] = useState('')
   const [position, setPosition] = useState('')
+  const [jerseyNumber, setJerseyNumber] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -72,6 +73,7 @@ export default function JoinTeam() {
       .insert([{
         name: playerName.trim(),
         position: position.trim() || null,
+        jersey_number: jerseyNumber ? parseInt(jerseyNumber, 10) : null,
         team_id: team.id,
         user_id: userId,
       }])
@@ -219,6 +221,25 @@ export default function JoinTeam() {
             placeholder="e.g. Point Guard, Midfielder, Pitcher…"
             value={position}
             onChange={e => setPosition(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="jersey-number">
+            Jersey number{' '}
+            <span style={{ color: 'var(--muted)', fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>
+              (optional)
+            </span>
+          </label>
+          <input
+            id="jersey-number"
+            className="field"
+            type="number"
+            min="1"
+            max="99"
+            placeholder="e.g. 23"
+            value={jerseyNumber}
+            onChange={e => setJerseyNumber(e.target.value)}
           />
         </div>
 

@@ -50,7 +50,7 @@ export default function TeamLeaderboard() {
   const [sortKey, setSortKey] = useState('avg_net_rating')
   const [sortDir, setSortDir] = useState('desc')
   const [showAddPlayer, setShowAddPlayer] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', position: '' })
+  const [addForm, setAddForm] = useState({ name: '', position: '', jerseyNumber: '' })
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState('')
   const [addSuccess, setAddSuccess] = useState('')
@@ -60,7 +60,7 @@ export default function TeamLeaderboard() {
       setLoading(true)
       const [{ data: teamData, error: teamErr }, { data: stats, error: statsErr }] = await Promise.all([
         supabase.from('teams').select('*').eq('id', id).single(),
-        supabase.from('game_stats').select('*, players(name, position)').eq('team_id', id),
+        supabase.from('game_stats').select('*, players(name, position, jersey_number)').eq('team_id', id),
       ])
       if (teamErr || !teamData) { setError('Team not found.'); setLoading(false); return }
       if (statsErr) { setError(statsErr.message); setLoading(false); return }
@@ -69,17 +69,18 @@ export default function TeamLeaderboard() {
       const byPlayer = {}
       for (const s of (stats || [])) {
         const pid = s.player_id
-        if (!byPlayer[pid]) byPlayer[pid] = { playerId: pid, name: s.players?.name || 'Unknown', position: s.players?.position || '', records: [] }
+        if (!byPlayer[pid]) byPlayer[pid] = { playerId: pid, name: s.players?.name || 'Unknown', position: s.players?.position || '', jerseyNumber: s.players?.jersey_number ?? null, records: [] }
         byPlayer[pid].records.push(s)
       }
 
-      const compiled = Object.values(byPlayer).map(({ playerId, name, position, records }) => {
+      const compiled = Object.values(byPlayer).map(({ playerId, name, position, jerseyNumber, records }) => {
         const games = records.length
         const netSum = records.reduce((s, r) => s + calcNetRatingForRow(r), 0)
         return {
           playerId,
           name,
           position,
+          jerseyNumber,
           games,
           points:          sumStat(records, 'points'),
           assists:         sumStat(records, 'assists'),
@@ -129,11 +130,16 @@ export default function TeamLeaderboard() {
     setAddLoading(true)
     const { error: pe } = await supabase
       .from('players')
-      .insert([{ name: addForm.name.trim(), position: addForm.position.trim() || null, team_id: id }])
+      .insert([{
+        name: addForm.name.trim(),
+        position: addForm.position.trim() || null,
+        jersey_number: addForm.jerseyNumber ? parseInt(addForm.jerseyNumber, 10) : null,
+        team_id: id,
+      }])
     setAddLoading(false)
     if (pe) { setAddError(pe.message); return }
     setAddSuccess(`${addForm.name.trim()} added to the roster.`)
-    setAddForm({ name: '', position: '' })
+    setAddForm({ name: '', position: '', jerseyNumber: '' })
     setTimeout(() => { setAddSuccess(''); setShowAddPlayer(false) }, 1500)
   }
 
@@ -179,7 +185,7 @@ export default function TeamLeaderboard() {
             {isCoach && (
               <button
                 className="btn-ghost"
-                onClick={() => { setShowAddPlayer(true); setAddError(''); setAddSuccess(''); setAddForm({ name: '', position: '' }) }}
+                onClick={() => { setShowAddPlayer(true); setAddError(''); setAddSuccess(''); setAddForm({ name: '', position: '', jerseyNumber: '' }) }}
                 style={{ padding: '8px 18px', fontSize: '14px' }}
               >
                 + Add Player
@@ -239,6 +245,19 @@ export default function TeamLeaderboard() {
                     <option value="PF">PF – Power Forward</option>
                     <option value="C">C – Center</option>
                   </select>
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-jersey">Jersey Number</label>
+                  <input
+                    id="add-jersey"
+                    className="field"
+                    type="number"
+                    min="1"
+                    max="99"
+                    placeholder="e.g. 23"
+                    value={addForm.jerseyNumber}
+                    onChange={e => setAddForm(f => ({ ...f, jerseyNumber: e.target.value }))}
+                  />
                 </div>
                 {addError && (
                   <p style={{ color: '#E53E3E', fontSize: '13px', margin: 0 }}>{addError}</p>
@@ -312,6 +331,17 @@ export default function TeamLeaderboard() {
                           }}>
                             {i === 0 ? '★' : i + 1}
                           </div>
+                          {row.jerseyNumber != null && (
+                            <span style={{
+                              fontFamily: 'var(--font-data)', fontSize: '11px', fontWeight: 700,
+                              letterSpacing: '0.05em',
+                              color: 'var(--muted)',
+                              background: 'var(--ground)',
+                              border: '1px solid var(--border)',
+                              borderRadius: '4px', padding: '2px 6px',
+                              flexShrink: 0,
+                            }}>#{row.jerseyNumber}</span>
+                          )}
                           <span style={{ fontWeight: 500, color: 'var(--text)', fontSize: '15px' }}>
                             {row.name}
                           </span>

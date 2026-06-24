@@ -45,18 +45,40 @@ function parseVoiceLocally(transcript, players) {
   console.log('[voice] words:', words)
   console.log('[voice] player names to match:', players.map(p => p.name))
 
-  // Match any name part (first, last, or nickname) against transcript words
-  const player = players.find(p => {
-    const nameParts = p.name.toLowerCase().split(/\s+/)
-    const matched = nameParts.some(namePart => {
-      if (namePart.length <= 3) {
-        return words.includes(namePart)
+  let player = null
+  let jerseyWordIdx = -1
+
+  // Jersey number matching: "number 23 ..." or any standalone digit matching a jersey
+  const numberKeywordIdx = words.indexOf('number')
+  if (numberKeywordIdx >= 0 && numberKeywordIdx < words.length - 1) {
+    const num = parseInt(words[numberKeywordIdx + 1], 10)
+    if (!isNaN(num)) {
+      const jerseyMatch = players.find(p => p.jersey_number === num)
+      if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = numberKeywordIdx + 1 }
+    }
+  }
+  if (!player) {
+    for (let i = 0; i < words.length; i++) {
+      if (/^\d+$/.test(words[i])) {
+        const num = parseInt(words[i], 10)
+        const jerseyMatch = players.find(p => p.jersey_number === num)
+        if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = i; break }
       }
-      return words.some(w => w.length >= 3 && levenshtein(w, namePart) <= 1)
+    }
+  }
+
+  // Fall back to name matching
+  if (!player) {
+    player = players.find(p => {
+      const nameParts = p.name.toLowerCase().split(/\s+/)
+      const matched = nameParts.some(namePart => {
+        if (namePart.length <= 3) return words.includes(namePart)
+        return words.some(w => w.length >= 3 && levenshtein(w, namePart) <= 1)
+      })
+      console.log(`[voice] checking "${p.name}" (parts: ${JSON.stringify(nameParts)}) →`, matched)
+      return matched
     })
-    console.log(`[voice] checking "${p.name}" (parts: ${JSON.stringify(nameParts)}) →`, matched)
-    return matched
-  })
+  }
   if (!player) return null
 
   // Match stat by keyword phrases/words
@@ -66,10 +88,11 @@ function parseVoiceLocally(transcript, players) {
   }
   if (!statKey) return null
 
-  // Parse amount: digit > number word
+  // Parse amount: digit (skip jersey number word) > number word
   let amount = null
-  for (const w of words) {
-    if (/^\d+$/.test(w)) { amount = parseInt(w, 10); break }
+  for (let i = 0; i < words.length; i++) {
+    if (i === jerseyWordIdx) continue
+    if (/^\d+$/.test(words[i])) { amount = parseInt(words[i], 10); break }
   }
   if (amount === null) {
     for (const [word, val] of Object.entries(NUM_WORDS)) {
@@ -144,7 +167,7 @@ export default function LiveGame() {
 
   useEffect(() => {
     if (!selectedTeam) { setPlayers([]); return }
-    supabase.from('players').select('id,name')
+    supabase.from('players').select('id,name,jersey_number')
       .eq('team_id', selectedTeam)
       .order('name')
       .then(({ data }) => setPlayers(data || []))
@@ -676,7 +699,12 @@ export default function LiveGame() {
                   letterSpacing: '-0.01em', textTransform: 'uppercase',
                   color: 'var(--text)', lineHeight: 1,
                 }}>
-                  {player.name}
+                  {player.jersey_number != null && (
+                    <span style={{ color: 'var(--muted)', fontWeight: 700, marginRight: '4px' }}>
+                      #{player.jersey_number}
+                    </span>
+                  )}
+                  {player.name.split(' ')[0]}
                 </div>
                 <span style={{
                   fontFamily: 'var(--font-data)', fontSize: '9px', letterSpacing: '0.05em',
