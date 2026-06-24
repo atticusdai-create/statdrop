@@ -37,7 +37,25 @@ const STAT_KEYWORDS = [
   { key: 'points',   words: ['score', 'scored', 'basket', 'bucket', 'layup', 'dunk', 'shot', 'made', 'hit', 'points', 'pts', 'drain', 'drains', 'money', 'trey', 'three', 'triple', 'downtown'] },
 ]
 
-const NUM_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+const NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+
+function wordsToJerseyNum(words, startIdx) {
+  const ones = {
+    zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7,
+    eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13,
+    fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19,
+  }
+  const tens = { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 }
+  const w = words[startIdx]
+  if (!w) return null
+  if (w in ones) return { num: ones[w], endIdx: startIdx }
+  if (w in tens) {
+    const next = words[startIdx + 1]
+    if (next && next in ones && ones[next] > 0) return { num: tens[w] + ones[next], endIdx: startIdx + 1 }
+    return { num: tens[w], endIdx: startIdx }
+  }
+  return null
+}
 
 function parseVoiceLocally(transcript, players) {
   const t = transcript.toLowerCase()
@@ -46,24 +64,40 @@ function parseVoiceLocally(transcript, players) {
   console.log('[voice] player names to match:', players.map(p => p.name))
 
   let player = null
-  let jerseyWordIdx = -1
+  let jerseyWordStart = -1
+  let jerseyWordEnd = -1
 
-  // "number 23 ..." — explicit jersey number prefix
+  // "number 23 ..." or "number twenty three ..." — explicit jersey number prefix
   const numberKeywordIdx = words.indexOf('number')
   if (numberKeywordIdx >= 0 && numberKeywordIdx < words.length - 1) {
-    const num = parseInt(words[numberKeywordIdx + 1], 10)
+    const nextIdx = numberKeywordIdx + 1
+    const num = parseInt(words[nextIdx], 10)
     if (!isNaN(num)) {
       const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
-      if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = numberKeywordIdx + 1 }
+      if (jerseyMatch) { console.log(`[voice] jersey# converted: ${num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = nextIdx; jerseyWordEnd = nextIdx }
+    }
+    if (!player) {
+      const parsed = wordsToJerseyNum(words, nextIdx)
+      if (parsed) {
+        const jerseyMatch = players.find(p => Number(p.jersey_number) === parsed.num)
+        if (jerseyMatch) { console.log(`[voice] jersey# converted: ${parsed.num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = nextIdx; jerseyWordEnd = parsed.endIdx }
+      }
     }
   }
-  // Scan every word for a jersey number match
+  // Scan every word for a jersey number match (digit or word-form)
   if (!player) {
     for (let i = 0; i < words.length; i++) {
-      if (!/^\d+$/.test(words[i])) continue
-      const num = parseInt(words[i], 10)
-      const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
-      if (jerseyMatch) { player = jerseyMatch; jerseyWordIdx = i; break }
+      if (/^\d+$/.test(words[i])) {
+        const num = parseInt(words[i], 10)
+        const jerseyMatch = players.find(p => Number(p.jersey_number) === num)
+        if (jerseyMatch) { console.log(`[voice] jersey# converted: ${num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = i; jerseyWordEnd = i; break }
+      } else {
+        const parsed = wordsToJerseyNum(words, i)
+        if (parsed) {
+          const jerseyMatch = players.find(p => Number(p.jersey_number) === parsed.num)
+          if (jerseyMatch) { console.log(`[voice] jersey# converted: ${parsed.num} → matched player: ${jerseyMatch.name}`); player = jerseyMatch; jerseyWordStart = i; jerseyWordEnd = parsed.endIdx; break }
+        }
+      }
     }
   }
 
@@ -91,7 +125,7 @@ function parseVoiceLocally(transcript, players) {
   // Parse amount: digit (skip jersey number word) > number word
   let amount = null
   for (let i = 0; i < words.length; i++) {
-    if (i === jerseyWordIdx) continue
+    if (i >= jerseyWordStart && i <= jerseyWordEnd) continue
     if (/^\d+$/.test(words[i])) { amount = parseInt(words[i], 10); break }
   }
   if (amount === null) {
