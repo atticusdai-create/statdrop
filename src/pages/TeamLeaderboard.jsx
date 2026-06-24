@@ -152,12 +152,21 @@ export default function TeamLeaderboard() {
     if (!removeTarget) return
     setRemoveLoading(true)
     setRemoveError('')
-    const { error: err } = await supabase
+    const { error: err, count } = await supabase
       .from('players')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('id', removeTarget.playerId)
     setRemoveLoading(false)
-    if (err) { setRemoveError(err.message); return }
+    if (err) {
+      console.error('Failed to remove player:', err)
+      setRemoveError(err.message)
+      return
+    }
+    if (count === 0) {
+      console.error('Remove player blocked by RLS (count 0):', removeTarget)
+      setRemoveError('Could not remove player — permission denied.')
+      return
+    }
     setRows(prev => prev.filter(r => r.playerId !== removeTarget.playerId))
     setRemoveTarget(null)
   }
