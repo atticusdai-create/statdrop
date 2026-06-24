@@ -50,6 +50,8 @@ export default function JoinTeam() {
   async function handleJoin(e) {
     e.preventDefault()
     if (!playerName.trim()) { setError('Enter your name.'); return }
+    if (!position) { setError('Select your position.'); return }
+    if (jerseyNumber === '' || jerseyNumber === null) { setError('Enter your jersey number.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
     setLoading(true)
     setError('')
@@ -72,8 +74,8 @@ export default function JoinTeam() {
       .from('players')
       .insert([{
         name: playerName.trim(),
-        position: position.trim() || null,
-        jersey_number: jerseyNumber ? parseInt(jerseyNumber, 10) : null,
+        position: position,
+        jersey_number: parseInt(jerseyNumber, 10),
         team_id: team.id,
         user_id: userId,
       }])
@@ -208,38 +210,35 @@ export default function JoinTeam() {
         </div>
 
         <div>
-          <label className="label" htmlFor="position">
-            Position{' '}
-            <span style={{ color: 'var(--muted)', fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>
-              (optional)
-            </span>
-          </label>
-          <input
+          <label className="label" htmlFor="position">Position</label>
+          <select
             id="position"
             className="field"
-            type="text"
-            placeholder="e.g. Point Guard, Midfielder, Pitcher…"
             value={position}
             onChange={e => setPosition(e.target.value)}
-          />
+            required
+          >
+            <option value="" disabled>Select a position</option>
+            <option value="Point Guard">Point Guard</option>
+            <option value="Shooting Guard">Shooting Guard</option>
+            <option value="Small Forward">Small Forward</option>
+            <option value="Power Forward">Power Forward</option>
+            <option value="Center">Center</option>
+          </select>
         </div>
 
         <div>
-          <label className="label" htmlFor="jersey-number">
-            Jersey number{' '}
-            <span style={{ color: 'var(--muted)', fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>
-              (optional)
-            </span>
-          </label>
+          <label className="label" htmlFor="jersey-number">Jersey number</label>
           <input
             id="jersey-number"
             className="field"
             type="number"
-            min="1"
+            min="0"
             max="99"
             placeholder="e.g. 23"
             value={jerseyNumber}
             onChange={e => setJerseyNumber(e.target.value)}
+            required
           />
         </div>
 
