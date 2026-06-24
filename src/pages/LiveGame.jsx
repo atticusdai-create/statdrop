@@ -299,6 +299,7 @@ export default function LiveGame() {
     recognitionRef.current = recognition
 
     recognition.onresult = e => {
+      console.log('[voice] onresult fired — speech received on this device')
       const t = e.results[0][0].transcript.trim()
       console.log('[voice] transcript:', JSON.stringify(t))
       setLiveTranscript(t)
@@ -335,7 +336,7 @@ export default function LiveGame() {
     }
   }
 
-  async function handleVoiceToggle() {
+  function handleVoiceToggle() {
     if (voiceActiveRef.current) {
       voiceActiveRef.current = false
       recognitionRef.current?.stop()
@@ -347,32 +348,65 @@ export default function LiveGame() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { alert('Voice input requires Chrome, Edge, or Safari.'); return }
 
-    if (!micPermittedRef.current && navigator.mediaDevices?.getUserMedia) {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
-        micPermittedRef.current = true
-      } catch {
-        alert('Microphone access is required for voice input.')
-        return
-      }
-    } else {
-      micPermittedRef.current = true
-    }
-
-    // iOS Safari requires AudioContext to be created/resumed from a user gesture
+    // iOS Safari: AudioContext must be unlocked synchronously in the gesture — no await
     if (!audioUnlockedRef.current) {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)()
-        await ctx.resume()
-        ctx.close()
+        ctx.resume().then(() => ctx.close()).catch(() => {})
       } catch {}
       audioUnlockedRef.current = true
+    }
+
+    // iOS Safari: recognition must be instantiated AND started synchronously in the
+    // user-gesture call stack. Any await before start() breaks the gesture chain.
+    const recognition = new SR()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognitionRef.current = recognition
+
+    recognition.onresult = e => {
+      console.log('[voice] onresult fired — speech received on this device')
+      const t = e.results[0][0].transcript.trim()
+      console.log('[voice] transcript:', JSON.stringify(t))
+      setLiveTranscript(t)
+      const match = parseVoiceLocally(t, playersRef.current)
+      if (match) {
+        logStat(match.player.id, match.statKey, match.amount)
+        setTimeout(() => setLiveTranscript(''), 1500)
+      } else {
+        setLiveTranscript("Didn't catch that…")
+        setTimeout(() => setLiveTranscript(''), 2000)
+      }
+    }
+
+    recognition.onend = () => {
+      recognitionRef.current = null
+      if (!voiceActiveRef.current) return
+      startRecognitionLoop()
+    }
+
+    recognition.onerror = e => {
+      if (e.error === 'aborted') return
+      console.error('Speech recognition error:', e.error)
+      recognitionRef.current = null
+      if (!voiceActiveRef.current) return
+      startRecognitionLoop()
     }
 
     voiceActiveRef.current = true
     setPttListening(true)
     setLiveTranscript('')
-    startRecognitionLoop()
+
+    // Must be the last call — synchronous within the user gesture handler
+    try {
+      recognition.start()
+    } catch (err) {
+      console.error('Failed to start recognition:', err)
+      recognitionRef.current = null
+      voiceActiveRef.current = false
+      setPttListening(false)
+    }
   }
 
   function startGame() {
