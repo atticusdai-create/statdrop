@@ -1,10 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { signIn, user, playerProfile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from?.pathname || '/dashboard'
@@ -13,27 +12,30 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [pendingRedirect, setPendingRedirect] = useState(false)
+
+  // Once auth + player profile have both resolved after login, redirect
+  useEffect(() => {
+    if (!pendingRedirect) return
+    if (!user || playerProfile === undefined) return
+
+    setPendingRedirect(false)
+    if (playerProfile) {
+      navigate(`/player/${playerProfile.id}`, { replace: true })
+    } else {
+      navigate(from, { replace: true })
+    }
+  }, [pendingRedirect, user, playerProfile, navigate, from])
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { data, error: err } = await signIn(email, password)
+    const { error: err } = await signIn(email, password)
     setLoading(false)
     if (err) { setError(err.message); return }
 
-    // Redirect players to their profile, coaches to the intended page
-    const { data: playerData } = await supabase
-      .from('players')
-      .select('id')
-      .eq('user_id', data.user.id)
-      .maybeSingle()
-
-    if (playerData) {
-      navigate(`/player/${playerData.id}`, { replace: true })
-    } else {
-      navigate(from, { replace: true })
-    }
+    setPendingRedirect(true)
   }
 
   return (

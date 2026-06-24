@@ -54,6 +54,9 @@ export default function TeamLeaderboard() {
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState('')
   const [addSuccess, setAddSuccess] = useState('')
+  const [removeTarget, setRemoveTarget] = useState(null)
+  const [removeLoading, setRemoveLoading] = useState(false)
+  const [removeError, setRemoveError] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -143,6 +146,20 @@ export default function TeamLeaderboard() {
     setAddSuccess(`${addForm.name.trim()} added to the roster.`)
     setAddForm({ name: '', position: '', jerseyNumber: '', height: '', dateOfBirth: '' })
     setTimeout(() => { setAddSuccess(''); setShowAddPlayer(false) }, 1500)
+  }
+
+  async function handleRemovePlayer() {
+    if (!removeTarget) return
+    setRemoveLoading(true)
+    setRemoveError('')
+    const { error: err } = await supabase
+      .from('players')
+      .delete()
+      .eq('id', removeTarget.playerId)
+    setRemoveLoading(false)
+    if (err) { setRemoveError(err.message); return }
+    setRows(prev => prev.filter(r => r.playerId !== removeTarget.playerId))
+    setRemoveTarget(null)
   }
 
   if (loading) return <LoadState />
@@ -301,6 +318,53 @@ export default function TeamLeaderboard() {
         </div>
       )}
 
+      {/* Remove Player Confirmation Modal */}
+      {removeTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px',
+        }} onClick={e => { if (e.target === e.currentTarget && !removeLoading) setRemoveTarget(null) }}>
+          <div className="card" style={{ width: '100%', maxWidth: '380px', padding: '32px' }}>
+            <h2 style={{
+              fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 800,
+              letterSpacing: '-0.01em', textTransform: 'uppercase',
+              color: 'var(--text)', margin: '0 0 12px',
+            }}>Remove Player</h2>
+            <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0 0 24px', lineHeight: '1.6' }}>
+              Remove <strong style={{ color: 'var(--text)' }}>{removeTarget.name}</strong> from the roster?
+              This will permanently delete their player record and all game stats.
+            </p>
+            {removeError && (
+              <p style={{ color: '#E53E3E', fontSize: '13px', margin: '0 0 16px' }}>{removeError}</p>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleRemovePlayer}
+                disabled={removeLoading}
+                style={{
+                  flex: 1, padding: '10px 16px', fontSize: '14px', fontWeight: 600,
+                  background: '#E53E3E', color: '#fff', border: 'none',
+                  borderRadius: '8px', cursor: removeLoading ? 'not-allowed' : 'pointer',
+                  opacity: removeLoading ? 0.7 : 1,
+                }}
+              >
+                {removeLoading ? 'Removing…' : 'Remove'}
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={() => setRemoveTarget(null)}
+                disabled={removeLoading}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <EmptyState teamId={id} isCoach={isCoach} />
       ) : (
@@ -329,6 +393,7 @@ export default function TeamLeaderboard() {
                         </button>
                       </th>
                     ))}
+                    {isCoach && <th style={{ padding: '14px 12px', width: '40px' }}></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -397,6 +462,25 @@ export default function TeamLeaderboard() {
                           </span>
                         </td>
                       ))}
+                      {isCoach && (
+                        <td style={{ padding: '16px 12px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => { setRemoveError(''); setRemoveTarget(row) }}
+                            title="Remove player"
+                            style={{
+                              background: 'none', border: '1px solid var(--border)',
+                              borderRadius: '6px', padding: '4px 8px',
+                              cursor: 'pointer', color: 'var(--muted)',
+                              fontSize: '12px', fontFamily: 'var(--font-body)',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E53E3E'; e.currentTarget.style.color = '#E53E3E' }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)' }}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -42,9 +42,16 @@ export default function Nav() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         {user && playerProfile !== undefined && (
           playerProfile ? (
-            <Link to={`/player/${playerProfile.id}`} className="btn-ghost" style={{ padding: '7px 16px', fontSize: '14px' }}>
-              My Profile
-            </Link>
+            <>
+              <Link to={`/player/${playerProfile.id}`} className="btn-ghost" style={{ padding: '7px 16px', fontSize: '14px' }}>
+                My Profile
+              </Link>
+              {playerProfile.team_id && (
+                <Link to={`/team/${playerProfile.team_id}`} className="btn-ghost" style={{ padding: '7px 16px', fontSize: '14px' }}>
+                  My Team
+                </Link>
+              )}
+            </>
           ) : (
             <Link to="/dashboard" className="btn-ghost" style={{ padding: '7px 16px', fontSize: '14px' }}>
               My Teams

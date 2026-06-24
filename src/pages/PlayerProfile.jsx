@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 const STAT_CHARTS = [
   { key: 'points',          label: 'Points',          color: '#1A5CFF' },
@@ -313,12 +314,29 @@ function StatChart({ data, statKey, label, color }) {
 
 export default function PlayerProfile() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { user, signOut } = useAuth()
   const [player, setPlayer] = useState(null)
   const [team, setTeam] = useState(null)
   const [stats, setStats] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function handleDeleteAccount() {
+    setDeleteLoading(true)
+    setDeleteError('')
+    const { error: playerErr } = await supabase.from('players').delete().eq('id', id)
+    if (playerErr) { setDeleteError(playerErr.message); setDeleteLoading(false); return }
+    const { error: rpcErr } = await supabase.rpc('delete_user')
+    if (rpcErr) {
+      await signOut()
+    }
+    navigate('/', { replace: true })
+  }
 
   function shareProfile() {
     const url = `${window.location.origin}/public/player/${id}`
@@ -476,8 +494,7 @@ export default function PlayerProfile() {
 
       {stats.length === 0 ? (
         <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
-          <p style={{ color: 'var(--muted)', marginBottom: '20px' }}>No stats logged for this player yet.</p>
-          <Link to={`/log?team=${team?.id}`} className="btn-primary">Log First Game</Link>
+          <p style={{ color: 'var(--muted)' }}>No stats logged for this player yet.</p>
         </div>
       ) : (
         <>
@@ -536,6 +553,74 @@ export default function PlayerProfile() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete account — only shown to the player viewing their own profile */}
+      {user && player?.user_id === user.id && (
+        <div style={{ marginTop: '80px', paddingTop: '32px', borderTop: '1px solid var(--border)' }}>
+          <button
+            onClick={() => { setDeleteError(''); setShowDeleteConfirm(true) }}
+            style={{
+              background: 'none', border: '1px solid var(--border)',
+              borderRadius: '8px', padding: '10px 20px',
+              fontSize: '13px', color: 'var(--muted)', cursor: 'pointer',
+              fontFamily: 'var(--font-body)', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E53E3E'; e.currentTarget.style.color = '#E53E3E' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)' }}
+          >
+            Delete Account
+          </button>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px',
+        }} onClick={e => { if (e.target === e.currentTarget && !deleteLoading) setShowDeleteConfirm(false) }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <h2 style={{
+              fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 800,
+              letterSpacing: '-0.01em', textTransform: 'uppercase',
+              color: 'var(--text)', margin: '0 0 12px',
+            }}>Delete Account</h2>
+            <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0 0 8px', lineHeight: '1.6' }}>
+              This will permanently delete your player profile and all your game stats. This cannot be undone.
+            </p>
+            <p style={{ fontSize: '14px', color: '#E53E3E', margin: '0 0 24px', lineHeight: '1.6', fontWeight: 500 }}>
+              Are you sure you want to delete your account?
+            </p>
+            {deleteError && (
+              <p style={{ color: '#E53E3E', fontSize: '13px', margin: '0 0 16px' }}>{deleteError}</p>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+                style={{
+                  flex: 1, padding: '10px 16px', fontSize: '14px', fontWeight: 600,
+                  background: '#E53E3E', color: '#fff', border: 'none',
+                  borderRadius: '8px', cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  opacity: deleteLoading ? 0.7 : 1,
+                }}
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete My Account'}
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
