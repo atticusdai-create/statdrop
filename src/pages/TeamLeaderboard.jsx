@@ -41,8 +41,11 @@ function SortArrow({ dir }) {
 
 function generateGameReport(rawStats, rows, teamName) {
   if (!rawStats.length || !rows.length) return ''
-  const latestDate = rawStats.reduce((max, s) => s.game_date > max ? s.game_date : max, rawStats[0].game_date)
+  const validDates = rawStats.map(s => s.game_date).filter(Boolean)
+  if (!validDates.length) return ''
+  const latestDate = validDates.reduce((max, d) => d > max ? d : max)
   const lastGame = rawStats.filter(s => s.game_date === latestDate)
+  console.log('[GameReport] most recent game_date:', latestDate, 'filtered rows:', lastGame)
   if (!lastGame.length) return ''
 
   const players = lastGame.map(s => {

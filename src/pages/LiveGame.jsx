@@ -23,6 +23,7 @@ export default function LiveGame() {
   const [teams, setTeams] = useState([])
   const [players, setPlayers] = useState([])
   const [selectedTeam, setSelectedTeam] = useState(searchParams.get('team') || '')
+  const [gameDate, setGameDate] = useState(today())
   const [gameStarted, setGameStarted] = useState(false)
   const [setupError, setSetupError] = useState('')
   const [ended, setEnded] = useState(false)
@@ -74,7 +75,7 @@ export default function LiveGame() {
         .insert([{
           player_id: playerId,
           team_id: selectedTeam,
-          game_date: today(),
+          game_date: gameDate,
           ...totals,
         }])
         .select()
@@ -241,6 +242,14 @@ export default function LiveGame() {
               <option value="">Select a team</option>
               {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="live-date">Game Date</label>
+            <input
+              id="live-date" className="field" type="date"
+              value={gameDate} onChange={e => setGameDate(e.target.value)}
+            />
           </div>
 
           {selectedTeam && players.length > 0 && (
