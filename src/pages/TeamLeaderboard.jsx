@@ -196,7 +196,24 @@ export default function TeamLeaderboard() {
             letterSpacing: '-0.02em', textTransform: 'uppercase',
             color: 'var(--text)', margin: 0,
           }}>{team.name}</h1>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+            {rows.length > 0 && (
+              <Link
+                to={`/team/${id}/season`}
+                style={{
+                  padding: '8px 18px', fontSize: '14px', fontWeight: 600,
+                  textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  background: '#F59E0B', color: '#FFFFFF',
+                  border: 'none', borderRadius: '8px',
+                  fontFamily: 'var(--font-body)',
+                  transition: 'opacity 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                🏆 Season Summary
+              </Link>
+            )}
             {isCoach && (
               <span style={{
                 fontFamily: 'var(--font-data)', fontSize: '12px',

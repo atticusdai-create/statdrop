@@ -15,6 +15,7 @@ import PublicPlayerProfile from './pages/PublicPlayerProfile'
 import CreateTeam from './pages/CreateTeam'
 import JoinTeam from './pages/JoinTeam'
 import LiveGame from './pages/LiveGame'
+import SeasonSummary from './pages/SeasonSummary'
 
 function AppLayout() {
   const location = useLocation()
@@ -33,6 +34,7 @@ function AppLayout() {
           <Route path="/create" element={<CoachRoute><CreateTeam /></CoachRoute>} />
           <Route path="/join" element={<JoinTeam />} />
           <Route path="/team/:id" element={<TeamLeaderboard />} />
+          <Route path="/team/:id/season" element={<SeasonSummary />} />
           <Route path="/log" element={<CoachRoute><StatLog /></CoachRoute>} />
           <Route path="/player/:id" element={<ProtectedRoute><PlayerProfile /></ProtectedRoute>} />
           <Route path="/public/player/:id" element={<PublicPlayerProfile />} />
