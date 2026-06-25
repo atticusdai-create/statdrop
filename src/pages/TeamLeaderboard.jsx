@@ -799,7 +799,7 @@ export default function TeamLeaderboard() {
                       cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
                   >
-                    {gameReport ? 'Regenerate' : 'Generate Report'}
+                    {gameReport ? 'Regenerate' : 'Generate Game Report'}
                   </button>
                 </div>
                 {gameReport && (
@@ -931,7 +931,7 @@ export default function TeamLeaderboard() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    Compare
+                    Compare Players
                   </button>
                 </div>
                 {comparisonText && (
