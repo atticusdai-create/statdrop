@@ -41,10 +41,10 @@ function SortArrow({ dir }) {
 
 function generateGameReport(rawStats, rows, teamName) {
   if (!rawStats.length || !rows.length) return ''
-  const validDates = rawStats.map(s => s.game_date).filter(Boolean)
+  const validDates = rawStats.map(s => s.game_date ? s.game_date.slice(0, 10) : null).filter(Boolean)
   if (!validDates.length) return ''
   const latestDate = validDates.reduce((max, d) => d > max ? d : max)
-  const lastGame = rawStats.filter(s => s.game_date === latestDate)
+  const lastGame = rawStats.filter(s => s.game_date && s.game_date.slice(0, 10) === latestDate)
   console.log('[GameReport] most recent game_date:', latestDate, 'filtered rows:', lastGame)
   if (!lastGame.length) return ''
 

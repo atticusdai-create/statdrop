@@ -38,6 +38,7 @@ export default function LiveGame() {
   const recordIds = useRef({})
   const pendingRef = useRef({})
   const savingFlags = useRef({})
+  const gameDateRef = useRef('')
   const playersRef = useRef(players)
   const lastEntryTimerRef = useRef(null)
 
@@ -75,7 +76,7 @@ export default function LiveGame() {
         .insert([{
           player_id: playerId,
           team_id: selectedTeam,
-          game_date: gameDate,
+          game_date: gameDateRef.current,
           ...totals,
         }])
         .select()
@@ -147,6 +148,7 @@ export default function LiveGame() {
     if (!selectedTeam) { setSetupError('Select a team.'); return }
     if (players.length === 0) { setSetupError('This team has no players yet.'); return }
     setSetupError('')
+    gameDateRef.current = gameDate
     recordIds.current = {}
     pendingRef.current = {}
     savingFlags.current = {}
