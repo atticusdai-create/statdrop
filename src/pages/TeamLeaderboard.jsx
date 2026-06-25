@@ -330,6 +330,7 @@ export default function TeamLeaderboard() {
   if (error)   return <ErrState msg={error} />
 
   const isCoach = !!user && user.id === team?.coach_id
+  console.log('[TeamLeaderboard] user.id:', user?.id, '| team.coach_id:', team?.coach_id, '| isCoach:', isCoach)
 
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '48px 24px' }}>
