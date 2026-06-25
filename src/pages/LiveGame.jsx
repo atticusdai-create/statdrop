@@ -291,7 +291,7 @@ export default function LiveGame() {
 
       {/* Undo toast */}
       {lastEntry && (
-        <div style={{
+        <div className="live-undo-toast" style={{
           position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
           zIndex: 999,
           display: 'flex', alignItems: 'center', gap: '10px',
@@ -398,7 +398,7 @@ export default function LiveGame() {
       </div>
 
       {/* Player cards */}
-      <div style={{
+      <div className="live-player-grid" style={{
         padding: '12px 12px 40px',
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
@@ -470,6 +470,7 @@ export default function LiveGame() {
                   {[1, 2, 3].map(amt => (
                     <button
                       key={amt}
+                      className="live-stat-btn"
                       onClick={() => logStat(player.id, 'points', amt)}
                       style={{
                         padding: '10px 2px', borderRadius: '7px',
@@ -486,6 +487,7 @@ export default function LiveGame() {
                     </button>
                   ))}
                   <button
+                    className="live-stat-btn"
                     onClick={() => subtractStat(player.id, 'points')}
                     style={{
                       padding: '10px 2px', borderRadius: '7px',
@@ -505,6 +507,7 @@ export default function LiveGame() {
                     {group.flatMap(({ key, label, color }) => [
                       <button
                         key={`+${key}`}
+                        className="live-stat-btn"
                         onClick={() => logStat(player.id, key)}
                         style={{
                           padding: '10px 2px', borderRadius: '7px',
@@ -521,6 +524,7 @@ export default function LiveGame() {
                       </button>,
                       <button
                         key={`-${key}`}
+                        className="live-stat-btn"
                         onClick={() => subtractStat(player.id, key)}
                         style={{
                           padding: '10px 2px', borderRadius: '7px',

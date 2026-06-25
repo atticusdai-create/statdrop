@@ -201,7 +201,7 @@ export default function JoinTeam() {
       </div>
 
       <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="form-name-row" style={{ display: 'flex', gap: '12px' }}>
           <div style={{ flex: 1 }}>
             <label className="label" htmlFor="first-name">First name</label>
             <input

@@ -164,3 +164,69 @@ body {
   color: var(--muted);
   margin-bottom: 6px;
 }
+
+/* ─── Mobile Responsive (≤ 480px) ──────────────────────────────────── */
+@media (max-width: 480px) {
+  /* Nav: compress buttons so they don't overflow on small screens */
+  .nav-links {
+    gap: 6px !important;
+  }
+  .nav-links .btn-ghost,
+  .nav-links .btn-primary {
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  /* Landing hero: stack CTA buttons full-width */
+  .hero-ctas {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  /* Leaderboard: action buttons wrap nicely */
+  .leaderboard-actions {
+    flex-shrink: 1 !important;
+    flex-wrap: wrap !important;
+  }
+  .leaderboard-actions > a,
+  .leaderboard-actions > button {
+    flex: 1 1 calc(50% - 5px);
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* Player profile: stat charts in single column */
+  .stat-charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Live game: undo toast pinned to screen edges */
+  .live-undo-toast {
+    left: 12px !important;
+    right: 12px !important;
+    transform: none !important;
+    white-space: normal !important;
+    border-radius: 16px !important;
+    bottom: 24px !important;
+    flex-wrap: wrap !important;
+  }
+
+  /* Live game: player cards in single column */
+  .live-player-grid {
+    grid-template-columns: 1fr !important;
+    padding: 10px 10px 80px !important;
+  }
+
+  /* Live game: stat buttons taller for easier tap */
+  .live-stat-btn {
+    padding: 13px 2px !important;
+  }
+
+  /* Forms: side-by-side name fields stack vertically */
+  .form-name-row {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+}

@@ -349,7 +349,7 @@ export default function TeamLeaderboard() {
             letterSpacing: '-0.02em', textTransform: 'uppercase',
             color: 'var(--text)', margin: 0,
           }}>{team.name}</h1>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+          <div className="leaderboard-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
             <Link
               to={`/team/${id}/season`}
               style={{
@@ -417,7 +417,7 @@ export default function TeamLeaderboard() {
               <p style={{ color: '#10B981', fontFamily: 'var(--font-data)', fontSize: '14px', margin: 0 }}>{addSuccess}</p>
             ) : (
               <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div className="form-name-row" style={{ display: 'flex', gap: '10px' }}>
                   <div style={{ flex: 1 }}>
                     <label className="label" htmlFor="add-first-name">First Name</label>
                     <input

@@ -39,7 +39,7 @@ export default function Nav() {
         Stat<span style={{ color: 'var(--accent)' }}>Drop</span>
       </Link>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         {user && playerProfile !== undefined && (
           playerProfile ? (
             <>

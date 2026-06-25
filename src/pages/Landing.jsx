@@ -117,7 +117,7 @@ export default function Landing() {
             Log stats after every game. Track player progress over time. See who's leading the team — sorted however you need.
           </p>
 
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="hero-ctas" style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/create" className="btn-primary">
               Create a Team
             </Link>

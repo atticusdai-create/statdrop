@@ -618,7 +618,7 @@ export default function PlayerProfile() {
         <>
           <PlayerOverview stats={stats} playerName={player.name} />
           <CoachingTips stats={stats} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
+          <div className="stat-charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))', gap: '16px' }}>
             {STAT_CHARTS.map(({ key, label, color }) => (
               <StatChart
                 key={key}
