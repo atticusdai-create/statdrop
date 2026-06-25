@@ -39,6 +39,151 @@ function SortArrow({ dir }) {
   )
 }
 
+function generateGameReport(rawStats, rows, teamName) {
+  if (!rawStats.length || !rows.length) return ''
+  const latestDate = rawStats.reduce((max, s) => s.game_date > max ? s.game_date : max, rawStats[0].game_date)
+  const lastGame = rawStats.filter(s => s.game_date === latestDate)
+  if (!lastGame.length) return ''
+
+  const players = lastGame.map(s => {
+    const row = rows.find(r => r.playerId === s.player_id)
+    return {
+      name: row?.name || s.players?.name || 'Unknown',
+      points: s.points || 0,
+      assists: s.assists || 0,
+      rebounds: s.rebounds || 0,
+      steals: s.steals || 0,
+      blocks: s.blocks || 0,
+      rating: calcNetRatingForRow(s),
+    }
+  }).sort((a, b) => b.rating - a.rating)
+
+  const teamPts = players.reduce((s, p) => s + p.points, 0)
+  const teamAst = players.reduce((s, p) => s + p.assists, 0)
+  const teamReb = players.reduce((s, p) => s + p.rebounds, 0)
+  const avgRating = (players.reduce((s, p) => s + p.rating, 0) / players.length).toFixed(1)
+  const mvp = players[0]
+  const dateStr = new Date(latestDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+
+  let r = `On ${dateStr}, ${teamName} combined for ${teamPts} points, ${teamAst} assists, and ${teamReb} rebounds. `
+
+  r += `${mvp.name} led the way with a game-high StatDrop Rating of ${mvp.rating.toFixed(1)}`
+  const mvpH = []
+  if (mvp.points >= 12) mvpH.push(`${mvp.points} pts`)
+  if (mvp.assists >= 5) mvpH.push(`${mvp.assists} ast`)
+  if (mvp.rebounds >= 7) mvpH.push(`${mvp.rebounds} reb`)
+  if (mvp.steals >= 3) mvpH.push(`${mvp.steals} stl`)
+  if (mvp.blocks >= 3) mvpH.push(`${mvp.blocks} blk`)
+  if (mvpH.length) r += ` (${mvpH.join(', ')})`
+  r += `. `
+
+  if (players.length >= 2) {
+    const p2 = players[1]
+    const p2H = []
+    if (p2.points >= 10) p2H.push(`${p2.points} pts`)
+    if (p2.assists >= 4) p2H.push(`${p2.assists} ast`)
+    if (p2.rebounds >= 6) p2H.push(`${p2.rebounds} reb`)
+    if (p2H.length) r += `${p2.name} added ${p2H.join(', ')}. `
+  }
+
+  const bestDef = [...players].sort((a, b) => (b.steals + b.blocks) - (a.steals + a.blocks))[0]
+  if (bestDef.steals + bestDef.blocks >= 3) {
+    if (bestDef.steals >= 2 && bestDef.blocks >= 2) {
+      r += `${bestDef.name} was a force on both ends with ${bestDef.steals} steals and ${bestDef.blocks} blocks. `
+    } else if (bestDef.steals >= 3) {
+      r += `${bestDef.name} recorded ${bestDef.steals} steals, disrupting the opposing offense. `
+    } else if (bestDef.blocks >= 3) {
+      r += `${bestDef.name} protected the rim with ${bestDef.blocks} blocks. `
+    }
+  }
+
+  const topReb = [...players].sort((a, b) => b.rebounds - a.rebounds)[0]
+  if (topReb.rebounds >= 10 && topReb.name !== mvp.name) {
+    r += `${topReb.name} dominated the glass with ${topReb.rebounds} rebounds. `
+  }
+
+  const perf = avgRating >= 20 ? 'dominant' : avgRating >= 14 ? 'solid' : avgRating >= 8 ? 'competitive' : 'developing'
+  r += `The team averaged a ${avgRating} StatDrop Rating per player — a ${perf} collective performance.`
+  return r
+}
+
+function suggestLineup(rows) {
+  if (!rows.length) return []
+  const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
+  const sorted = [...rows].sort((a, b) => b.avg_net_rating - a.avg_net_rating)
+  const used = new Set()
+  const lineup = []
+
+  for (const pos of POSITIONS) {
+    const match = sorted.find(r => r.position === pos && !used.has(r.playerId))
+    if (match) { lineup.push({ player: match, slot: pos, outOfPosition: false }); used.add(match.playerId) }
+  }
+
+  const filledSlots = new Set(lineup.map(l => l.slot))
+  for (const slot of POSITIONS.filter(p => !filledSlots.has(p))) {
+    const fill = sorted.find(r => !used.has(r.playerId))
+    if (fill) { lineup.push({ player: fill, slot, outOfPosition: !!(fill.position && fill.position !== slot) }); used.add(fill.playerId) }
+  }
+
+  return lineup.sort((a, b) => POSITIONS.indexOf(a.slot) - POSITIONS.indexOf(b.slot))
+}
+
+function pickReason({ player, slot, outOfPosition }) {
+  const { name, avg_net_rating: rating, games, points, assists, rebounds } = player
+  const parts = []
+  if (outOfPosition) parts.push(`Filling in at ${slot} from their natural ${player.position} position.`)
+  if (rating >= 22) parts.push(`Team's highest StatDrop Rating (${rating} avg) — automatic starter.`)
+  else if (rating >= 16) parts.push(`Strong ${rating} avg rating over ${games} game${games !== 1 ? 's' : ''} earns the starting spot.`)
+  else if (rating >= 10) parts.push(`Reliable presence averaging ${rating} StatDrop Rating per game.`)
+  else parts.push(`Best available for this slot (${rating} avg StatDrop Rating).`)
+  if (slot === 'PG' && assists > 5) parts.push(`${assists} total assists shows ability to run the offense.`)
+  else if ((slot === 'C' || slot === 'PF') && rebounds > 8) parts.push(`${rebounds} total rebounds provides interior presence.`)
+  else if ((slot === 'SG' || slot === 'SF') && points > 15) parts.push(`${points} total points is a scoring threat on the wing.`)
+  return parts.join(' ')
+}
+
+function generateComparison(rows, id1, id2) {
+  const a = rows.find(r => r.playerId === id1)
+  const b = rows.find(r => r.playerId === id2)
+  if (!a || !b) return ''
+
+  const pg = (row, stat) => row.games > 0 ? row[stat] / row.games : 0
+  const cats = [
+    { label: 'scoring',           aV: pg(a, 'points'),   bV: pg(b, 'points') },
+    { label: 'playmaking',        aV: pg(a, 'assists'),  bV: pg(b, 'assists') },
+    { label: 'rebounding',        aV: pg(a, 'rebounds'), bV: pg(b, 'rebounds') },
+    { label: 'perimeter defense', aV: pg(a, 'steals'),   bV: pg(b, 'steals') },
+    { label: 'rim protection',    aV: pg(a, 'blocks'),   bV: pg(b, 'blocks') },
+  ]
+  const aEdge = cats.filter(c => c.aV > c.bV * 1.15).map(c => c.label)
+  const bEdge = cats.filter(c => c.bV > c.aV * 1.15).map(c => c.label)
+
+  const better = a.avg_net_rating >= b.avg_net_rating ? a : b
+  const other  = better === a ? b : a
+  const betterEdge = better === a ? aEdge : bEdge
+  const otherEdge  = better === a ? bEdge : aEdge
+  const fmt = list => list.length === 1 ? list[0] : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]
+
+  let text = `${a.name} (${a.avg_net_rating} avg rating, ${a.games} GP) vs. ${b.name} (${b.avg_net_rating} avg rating, ${b.games} GP). `
+  text += `${better.name} has the overall edge`
+  if (betterEdge.length) text += `, leading in ${fmt(betterEdge)}`
+  text += `. `
+  if (otherEdge.length) text += `${other.name} counters with stronger ${fmt(otherEdge)}. `
+
+  if (a.position && b.position) {
+    if (a.position === b.position) {
+      text += `Both play ${a.position}, making this a direct positional battle — ${better.name} currently holds the starting edge, while ${other.name} provides depth at the same spot. `
+    } else {
+      text += `With ${a.name} at ${a.position} and ${b.name} at ${b.position}, they can share the floor rather than competing for the same role. `
+    }
+  }
+
+  text += `Bottom line: ${better.name} is the stronger statistical producer right now`
+  if (otherEdge.length) text += `, though ${other.name}'s ${otherEdge[0]} gives the team a dimension worth preserving`
+  text += `.`
+  return text
+}
+
 export default function TeamLeaderboard() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -57,6 +202,12 @@ export default function TeamLeaderboard() {
   const [removeTarget, setRemoveTarget] = useState(null)
   const [removeLoading, setRemoveLoading] = useState(false)
   const [removeError, setRemoveError] = useState('')
+  const [rawStats, setRawStats] = useState([])
+  const [gameReport, setGameReport] = useState('')
+  const [lineupResult, setLineupResult] = useState(null)
+  const [compareP1, setCompareP1] = useState('')
+  const [compareP2, setCompareP2] = useState('')
+  const [comparisonText, setComparisonText] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -97,6 +248,7 @@ export default function TeamLeaderboard() {
 
       compiled.sort((a, b) => b.avg_net_rating - a.avg_net_rating)
       setRows(compiled)
+      setRawStats(stats || [])
       setLoading(false)
     }
 
@@ -601,6 +753,196 @@ export default function TeamLeaderboard() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* AI Tools */}
+          <div style={{ marginTop: '40px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <h2 style={{
+                fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700,
+                letterSpacing: '-0.01em', textTransform: 'uppercase',
+                color: 'var(--text)', margin: 0,
+              }}>AI Tools</h2>
+              <span style={{
+                fontFamily: 'var(--font-display)', fontSize: '9px', fontWeight: 700,
+                letterSpacing: '0.1em', textTransform: 'uppercase',
+                background: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6',
+                border: '1px solid rgba(139, 92, 246, 0.25)',
+                borderRadius: '6px', padding: '3px 10px',
+              }}>AI</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+              {/* Game Report */}
+              <div className="card" style={{ padding: '24px 28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <div>
+                    <p style={{
+                      fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600,
+                      letterSpacing: '0.18em', textTransform: 'uppercase',
+                      color: 'var(--muted)', margin: '0 0 4px',
+                    }}>Game Report</p>
+                    <p style={{ fontSize: '13px', color: 'var(--text)', margin: 0, lineHeight: '1.5' }}>
+                      {gameReport ? 'Last game analysis generated.' : "Summarize the team's most recent game."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setGameReport(generateGameReport(rawStats, rows, team.name))}
+                    style={{
+                      fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 700,
+                      letterSpacing: '0.12em', textTransform: 'uppercase',
+                      color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.08)',
+                      border: '1px solid rgba(139, 92, 246, 0.25)',
+                      borderRadius: '8px', padding: '8px 16px',
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {gameReport ? 'Regenerate' : 'Generate Report'}
+                  </button>
+                </div>
+                {gameReport && (
+                  <p style={{
+                    fontFamily: 'var(--font-body)', fontSize: '14px', lineHeight: '1.8',
+                    color: 'var(--text)', margin: '20px 0 0',
+                    paddingTop: '16px', borderTop: '1px solid var(--border)',
+                  }}>{gameReport}</p>
+                )}
+              </div>
+
+              {/* Lineup Suggester */}
+              <div className="card" style={{ padding: '24px 28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <div>
+                    <p style={{
+                      fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600,
+                      letterSpacing: '0.18em', textTransform: 'uppercase',
+                      color: 'var(--muted)', margin: '0 0 4px',
+                    }}>Lineup Suggester</p>
+                    <p style={{ fontSize: '13px', color: 'var(--text)', margin: 0, lineHeight: '1.5' }}>
+                      {lineupResult ? 'Recommended starting 5 below.' : 'Pick the optimal lineup based on ratings and positions.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setLineupResult(suggestLineup(rows))}
+                    style={{
+                      fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 700,
+                      letterSpacing: '0.12em', textTransform: 'uppercase',
+                      color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.08)',
+                      border: '1px solid rgba(139, 92, 246, 0.25)',
+                      borderRadius: '8px', padding: '8px 16px',
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {lineupResult ? 'Regenerate' : 'Suggest Lineup'}
+                  </button>
+                </div>
+                {lineupResult && lineupResult.length > 0 && (
+                  <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {lineupResult.map((entry, i) => (
+                      <div key={i} style={{
+                        display: 'flex', gap: '14px', alignItems: 'flex-start',
+                        background: 'var(--ground)', borderRadius: '8px', padding: '14px 16px',
+                      }}>
+                        <span style={{
+                          fontFamily: 'var(--font-data)', fontSize: '11px', fontWeight: 700,
+                          letterSpacing: '0.08em', textTransform: 'uppercase',
+                          color: 'var(--accent)', background: 'var(--accent-dim)',
+                          border: '1px solid rgba(26, 92, 255, 0.25)',
+                          borderRadius: '6px', padding: '3px 8px',
+                          whiteSpace: 'nowrap', alignSelf: 'flex-start', marginTop: '1px',
+                        }}>{entry.slot}</span>
+                        <div style={{ flex: 1 }}>
+                          <p style={{
+                            fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 700,
+                            color: 'var(--text)', margin: '0 0 4px',
+                          }}>{entry.player.name}</p>
+                          <p style={{
+                            fontFamily: 'var(--font-body)', fontSize: '12px',
+                            color: 'var(--muted)', lineHeight: '1.6', margin: 0,
+                          }}>{pickReason(entry)}</p>
+                        </div>
+                        <span style={{
+                          fontFamily: 'var(--font-data)', fontSize: '13px', fontWeight: 700,
+                          color: '#E11D48', whiteSpace: 'nowrap',
+                        }}>{entry.player.avg_net_rating}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Player Comparison */}
+              <div className="card" style={{ padding: '24px 28px' }}>
+                <p style={{
+                  fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600,
+                  letterSpacing: '0.18em', textTransform: 'uppercase',
+                  color: 'var(--muted)', margin: '0 0 14px',
+                }}>Player Comparison</p>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={{
+                      display: 'block', fontSize: '11px', fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: 'var(--muted)', marginBottom: '6px',
+                    }}>Player 1</label>
+                    <select
+                      className="field"
+                      value={compareP1}
+                      onChange={e => { setCompareP1(e.target.value); setCompareP2(''); setComparisonText('') }}
+                      style={{ fontSize: '13px' }}
+                    >
+                      <option value="">Select player…</option>
+                      {rows.map(r => (
+                        <option key={r.playerId} value={r.playerId}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={{
+                      display: 'block', fontSize: '11px', fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: 'var(--muted)', marginBottom: '6px',
+                    }}>Player 2</label>
+                    <select
+                      className="field"
+                      value={compareP2}
+                      onChange={e => { setCompareP2(e.target.value); setComparisonText('') }}
+                      style={{ fontSize: '13px' }}
+                    >
+                      <option value="">Select player…</option>
+                      {rows.filter(r => r.playerId !== compareP1).map(r => (
+                        <option key={r.playerId} value={r.playerId}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => setComparisonText(generateComparison(rows, compareP1, compareP2))}
+                    disabled={!compareP1 || !compareP2}
+                    style={{
+                      fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 700,
+                      letterSpacing: '0.12em', textTransform: 'uppercase',
+                      color: !compareP1 || !compareP2 ? 'var(--muted)' : '#8B5CF6',
+                      background: !compareP1 || !compareP2 ? 'var(--ground)' : 'rgba(139, 92, 246, 0.08)',
+                      border: `1px solid ${!compareP1 || !compareP2 ? 'var(--border)' : 'rgba(139, 92, 246, 0.25)'}`,
+                      borderRadius: '8px', padding: '8px 16px',
+                      cursor: !compareP1 || !compareP2 ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Compare
+                  </button>
+                </div>
+                {comparisonText && (
+                  <p style={{
+                    fontFamily: 'var(--font-body)', fontSize: '14px', lineHeight: '1.8',
+                    color: 'var(--text)', margin: '20px 0 0',
+                    paddingTop: '16px', borderTop: '1px solid var(--border)',
+                  }}>{comparisonText}</p>
+                )}
+              </div>
+
             </div>
           </div>
         </>

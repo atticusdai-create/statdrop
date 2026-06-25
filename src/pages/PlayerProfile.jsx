@@ -172,6 +172,127 @@ function generateOverview(stats, playerName) {
   }
 }
 
+function generateCoachingTips(stats) {
+  if (!stats || stats.length === 0) return []
+  const n = stats.length
+  const avg = {
+    points:   stats.reduce((s, r) => s + r.points,   0) / n,
+    assists:  stats.reduce((s, r) => s + r.assists,  0) / n,
+    rebounds: stats.reduce((s, r) => s + r.rebounds, 0) / n,
+    steals:   stats.reduce((s, r) => s + r.steals,   0) / n,
+    blocks:   stats.reduce((s, r) => s + r.blocks,   0) / n,
+  }
+  const drills = [
+    {
+      stat: 'scoring', avg: avg.points, baseline: 12,
+      title: 'Spot-Up Shooting Circuits',
+      body: 'Set up at 5 spots around the arc (both corners, both wings, top of key). At each spot, take 10 catch-and-shoot reps with a focus on set feet and a consistent release point. Finish each circuit with 10 free throws. Track makes-per-spot to monitor improvement over time.',
+    },
+    {
+      stat: 'playmaking', avg: avg.assists, baseline: 4,
+      title: 'Court Vision 3-on-2 Drill',
+      body: 'Run a 3-on-2 shell with a passer at the top of the key. The passer cannot drive — they must read the defense and hit the open cutter or corner shooter. No dribble penetration allowed. Rotate roles every 5 reps for 15 total. Focus on identifying help-side defenders early.',
+    },
+    {
+      stat: 'rebounding', avg: avg.rebounds, baseline: 6,
+      title: 'Box-Out and React',
+      body: 'Coach shoots intentional misses from the elbow. The defender must find, seal, and maintain contact with their assignment before pursuing the ball. Offensive player tries to spin free. 20 reps per side — reward low, physical positioning over jumping early.',
+    },
+    {
+      stat: 'perimeter defense', avg: avg.steals, baseline: 1.5,
+      title: 'Defensive Slide and Mirror',
+      body: 'Ball handler dribbles in a 12-foot channel while the defender stays in front using only lateral slides — no reaching allowed. 10-second reps, then progress to live 1-on-1 with the ball handler starting with a step advantage. Emphasize hips low and feet never crossing.',
+    },
+    {
+      stat: 'shot-blocking', avg: avg.blocks, baseline: 1.5,
+      title: 'Verticality and Timing',
+      body: "Partner shoots from the mid-range while the defender works on jumping straight up — both hands raised — without reaching or fouling. 15 reps per session. Read the shooter's hip-turn as the contest trigger. Progress gradually to live post and drive situations.",
+    },
+  ]
+  return drills
+    .map(d => ({ ...d, score: Math.max(0, d.baseline - d.avg) / d.baseline }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+}
+
+function CoachingTips({ stats }) {
+  const [open, setOpen] = useState(false)
+  const tips = generateCoachingTips(stats)
+  if (!tips.length) return null
+
+  return (
+    <div className="card" style={{ padding: '28px 32px', marginBottom: '32px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <p style={{
+            fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600,
+            letterSpacing: '0.18em', textTransform: 'uppercase',
+            color: 'var(--muted)', margin: 0,
+          }}>Coaching Tips</p>
+          <span style={{
+            fontFamily: 'var(--font-display)', fontSize: '9px', fontWeight: 700,
+            letterSpacing: '0.1em', textTransform: 'uppercase',
+            background: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6',
+            border: '1px solid rgba(139, 92, 246, 0.25)',
+            borderRadius: '6px', padding: '2px 8px',
+          }}>AI</span>
+        </div>
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{
+            fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.08)',
+            border: '1px solid rgba(139, 92, 246, 0.25)',
+            borderRadius: '8px', padding: '8px 16px',
+            cursor: 'pointer',
+          }}
+        >
+          {open ? 'Hide Tips' : 'Get Coaching Tips'}
+        </button>
+      </div>
+
+      {!open && (
+        <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '12px 0 0', lineHeight: '1.5' }}>
+          3 drill recommendations targeting this player's weakest stat categories.
+        </p>
+      )}
+
+      {open && (
+        <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {tips.map((tip, i) => (
+            <div key={i} style={{
+              background: 'var(--ground)', border: '1px solid var(--border)',
+              borderRadius: '10px', padding: '18px 20px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-data)', fontSize: '11px', fontWeight: 700, color: '#8B5CF6' }}>
+                  #{i + 1}
+                </span>
+                <h3 style={{
+                  fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 700,
+                  letterSpacing: '-0.01em', color: 'var(--text)', margin: 0, flex: 1,
+                }}>{tip.title}</h3>
+                <span style={{
+                  fontFamily: 'var(--font-data)', fontSize: '10px', fontWeight: 600,
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                  color: 'var(--muted)', background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px', padding: '2px 6px',
+                }}>Focus: {tip.stat}</span>
+              </div>
+              <p style={{
+                fontFamily: 'var(--font-body)', fontSize: '13px',
+                color: 'var(--muted)', lineHeight: '1.7', margin: 0,
+              }}>{tip.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PlayerOverview({ stats, playerName }) {
   const ov = generateOverview(stats, playerName)
   if (!ov) return null
@@ -496,6 +617,7 @@ export default function PlayerProfile() {
       ) : (
         <>
           <PlayerOverview stats={stats} playerName={player.name} />
+          <CoachingTips stats={stats} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
             {STAT_CHARTS.map(({ key, label, color }) => (
               <StatChart
